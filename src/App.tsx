@@ -40,6 +40,7 @@ import {
 import { parseBrawMetadata, detectCropFactor } from './braw';
 import { composeOverBackground } from './chromakey';
 import PanoramaPanel from './PanoramaPanel';
+import { useElapsed, formatElapsed } from './useElapsed';
 import {
   activePanoramaVersion, panoramaSignature, cropCameraSector, buildPanoramaPrompt, circularMeanDeg,
   downscaleImage, imageSize, estimateHfovFromAspect, GENERATED_PANORAMA_HFOV, MIN_PANORAMA_ASPECT
@@ -1497,7 +1498,8 @@ function BeforeAfterViewer({
   isGeneratingStageA,
   isGeneratingStageB,
   onUploadInput,
-  onSelectVersion
+  onSelectVersion,
+  usesPanorama
 }) {
   const [sliderPos, setSliderPos] = useState(50);
   const containerRef = useRef(null);
@@ -1529,6 +1531,7 @@ function BeforeAfterViewer({
     };
   }, [isSliding, updateSlider]);
 
+  const elapsed = useElapsed(isGeneratingStageA || isGeneratingStageB);
   const hasInput = !!camera.inputImage;
   const hasPreview = !!camera.previewImage;
   const hasClean = !!camera.cleanPlateImage;
@@ -1576,14 +1579,17 @@ function BeforeAfterViewer({
         {isBusy && (
           <div className="absolute inset-0 z-30 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-6 text-center">
             <div
-              className="w-10 h-10 rounded-full border-2 border-[#262626] animate-spin"
+              className="w-10 h-10 shrink-0 rounded-full border-2 border-[#262626] animate-spin"
               style={{ borderTopColor: accentColor }}
             />
             <div className="text-sm font-semibold text-white">
-              {isGeneratingStageA ? 'Генерируем фон и собираем превью…' : 'Генерируем фон…'}
+              Генерируем фон для {camera.name} <span className="font-mono" style={{ color: accentColor }}>{formatElapsed(elapsed)}</span>
             </div>
-            <div className="text-xs text-neutral-400 max-w-xs">
-              Учитываем геометрию плана 12×9м, оптику {camera.focalLength}mm ({camera.aperture}) и баланс белого {camera.wbKelvin}K
+            <div className="text-xs text-neutral-400 max-w-sm leading-relaxed">
+              Отправили модели: исходник {camera.name}
+              {usesPanorama ? ', кусок панорамы за спикером и всю панораму' : ', фото локации'}
+              , план студии и параметры камеры ({camera.focalLength}mm, {camera.aperture}, {camera.wbKelvin}K).
+              <br />Обычно это 15–60 секунд. Потом приложение вырежет спикера из зелёнки и положит поверх фона.
             </div>
           </div>
         )}
@@ -3372,7 +3378,7 @@ function Studio({ initialProjects }) {
           </aside>
 
           {/* ==================== MAIN STUDIO WORKSPACE ==================== */}
-          <main className="lg:col-span-8 xl:col-span-9 p-4 flex flex-col gap-4 overflow-y-auto lg:max-h-[calc(100vh-56px)]">
+          <main className="lg:col-span-8 xl:col-span-9 p-4 flex flex-col gap-4 overflow-y-auto lg:max-h-[calc(100vh-56px)] *:shrink-0">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 bg-[#141414] border border-[#262626] p-1 rounded-full">
                 {[
@@ -3443,6 +3449,7 @@ function Studio({ initialProjects }) {
                   isGeneratingStageB={generatingCamB === activeCamera.id}
                   onUploadInput={handleUploadCameraInput}
                   onSelectVersion={(entry) => handleSelectVersion(activeCamera.id, entry)}
+                  usesPanorama={!!activePanoramaVersion(activeProject)}
                 />
               )}
             </div>
@@ -3454,6 +3461,9 @@ function Studio({ initialProjects }) {
               accentColor={accentColor}
               fovFor={(cam) => calcHorizontalFovDeg(cam.focalLength, cam.cropFactor)}
               busy={generatingPanorama || !!generatingCamA || !!batchProgress}
+              generating={generatingPanorama}
+              refsCount={Math.min(4, activeProject.locationRefs.length)}
+              hasNotes={!!activeProject.russianComment.trim()}
               onGenerate={handleGeneratePanorama}
               onUpload={handleUploadPanorama}
               onSelectVersion={handleSelectPanoramaVersion}

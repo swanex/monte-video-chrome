@@ -1,7 +1,7 @@
 {
   "name": "monte-video-chrome",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "description": "MONTE VIDEO — Проект Хром: генерация фонов (clean plates) для многокамерной съёмки на хромакее",
   "scripts": {

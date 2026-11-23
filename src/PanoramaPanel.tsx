@@ -1,6 +1,7 @@
 // @ts-nocheck
-import React from 'react';
-import { GalleryHorizontal as Panorama, Upload, Sparkles, RotateCw, MoveHorizontal, AlertTriangle } from 'lucide-react';
+import React, { useState } from 'react';
+import { useElapsed, formatElapsed } from './useElapsed';
+import { GalleryHorizontal as Panorama, Upload, Sparkles, RotateCw, MoveHorizontal, AlertTriangle, Maximize2, Minimize2 } from 'lucide-react';
 import { cameraSector, activePanoramaVersion } from './panorama';
 
 function hexToRgba(hex, a) {
@@ -28,6 +29,9 @@ export default function PanoramaPanel({
   accentColor,
   fovFor,
   busy,
+  generating,
+  refsCount,
+  hasNotes,
   onGenerate,
   onUpload,
   onSelectVersion,
@@ -38,6 +42,9 @@ export default function PanoramaPanel({
   const pano = project.panorama;
   const active = activePanoramaVersion(project);
   const versions = pano?.versions || [];
+  const [large, setLarge] = useState(false);
+  const [ratio, setRatio] = useState(21 / 9);
+  const elapsed = useElapsed(generating);
 
   const fileInput = (
     <input
@@ -63,6 +70,16 @@ export default function PanoramaPanel({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {active && (
+            <button
+              onClick={() => setLarge(v => !v)}
+              title={large ? 'Уменьшить панораму' : 'Показать панораму крупнее'}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1C1C] hover:bg-[#262626] border border-[#333333] text-xs font-medium text-neutral-300 hover:text-white transition"
+            >
+              {large ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              {large ? 'Меньше' : 'Крупнее'}
+            </button>
+          )}
           <button
             onClick={onGenerate}
             disabled={busy}
@@ -80,8 +97,22 @@ export default function PanoramaPanel({
         </div>
       </div>
 
+      <div className="relative">
+      {generating && (
+        <div className="absolute inset-0 z-20 min-h-[180px] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-6 text-center">
+          <div className="w-10 h-10 shrink-0 rounded-full border-2 border-[#262626] animate-spin" style={{ borderTopColor: accentColor }} />
+          <div className="text-sm font-semibold text-white">
+            Генерируем панораму локации <span className="font-mono" style={{ color: accentColor }}>{formatElapsed(elapsed)}</span>
+          </div>
+          <div className="text-xs text-neutral-400 max-w-lg leading-relaxed">
+            Отправили модели: {[refsCount > 0 ? `фото локации (${refsCount})` : null, hasNotes ? 'комментарий оператора' : null].filter(Boolean).join(' и ') || 'только задание'}.
+            Задание: одна широкая панорама 21:9 с охватом около 150°, горизонт посередине, без людей и без мебели на переднем плане.
+            <br />Обычно это 20–60 секунд. Потом на панораме появятся рамки камер.
+          </div>
+        </div>
+      )}
       {!active ? (
-        <div className="px-4 py-5 text-[11px] text-neutral-500 leading-relaxed">
+        <div className={`px-4 py-5 text-[11px] text-neutral-500 leading-relaxed ${generating ? 'min-h-[180px]' : ''}`}>
           Панорама — одна широкая картинка комнаты, общая для всех камер. По плану приложение вычисляет, какой её кусок
           окажется за спикером у каждой камеры, поэтому камеры с разных сторон видят одну и ту же комнату.
           Сгенерируйте панораму по фото локации или загрузите свою: панораму с телефона или широкий кадр (не уже 16:9).
@@ -89,8 +120,19 @@ export default function PanoramaPanel({
       ) : (
         <div className="p-3 space-y-3">
           {/* Панорама с рамками камер */}
-          <div className="relative w-full rounded-lg overflow-hidden bg-black select-none">
-            <img src={active.imageUrl} alt="Панорама локации" className="w-full h-auto block" draggable={false} />
+          <div className="flex justify-center bg-black rounded-lg">
+          {/* Панорама вписывается в ширину полосы, но не выше 42% (или 80%) экрана; рамки камер привязаны к самой картинке */}
+          <div
+            className="relative rounded-lg overflow-hidden select-none"
+            style={{ width: `min(100%, calc(${large ? 80 : 42}vh * ${ratio}))`, aspectRatio: String(ratio) }}
+          >
+            <img
+              src={active.imageUrl}
+              alt="Панорама локации"
+              className="block w-full h-full"
+              draggable={false}
+              onLoad={(e) => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) setRatio(i.naturalWidth / i.naturalHeight); }}
+            />
             {project.cameras.map(cam => {
               const sector = cameraSector(project, cam, fovFor(cam));
               if (!sector) return null;
@@ -126,6 +168,7 @@ export default function PanoramaPanel({
                 </button>
               ));
             })}
+          </div>
           </div>
 
           {/* Настройки привязки */}
@@ -183,6 +226,7 @@ export default function PanoramaPanel({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
