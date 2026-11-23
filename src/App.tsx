@@ -1635,7 +1635,7 @@ function BeforeAfterViewer({
           hasPreview ? (
             <img src={camera.previewImage} alt="Final Preview" className="w-full h-full object-contain" />
           ) : (
-            <div className="text-xs text-neutral-500">Сначала сгенерируйте превью (кнопка «1 · Превью»)</div>
+            <div className="text-xs text-neutral-500">Сначала сгенерируйте превью (кнопка «1 · Генерация превью»)</div>
           )
         )}
 
@@ -1652,7 +1652,7 @@ function BeforeAfterViewer({
             </div>
           ) : (
             <div className="text-xs text-neutral-500 text-center px-6">
-              Фона для этого превью ещё нет. Нажмите «2 · Фон», когда превью устраивает.
+              Фона для этого превью ещё нет. Нажмите «2 · Генерация фона», когда превью устраивает.
             </div>
           )
         )}
@@ -1669,16 +1669,17 @@ function BeforeAfterViewer({
           { key: 'B', title: 'Фоны из этого превью', items: backgrounds, activeUrl: camera.cleanPlateImage, mode: 'clean' }
         ];
         return (
-          <div className="border-t border-[#1E1E1E] bg-[#0B0B0B] px-3 py-2.5 space-y-2">
+          <div className="border-t border-[#1E1E1E] bg-[#0B0B0B] px-3 py-2 grid grid-cols-[minmax(0,13rem)_1fr] items-center gap-x-3 gap-y-1.5">
             {rows.map(row => (
-              <div key={row.key} className="flex items-center gap-2 min-w-0">
-                <span className="w-36 shrink-0 text-[10px] uppercase tracking-wider text-neutral-500">
+              <React.Fragment key={row.key}>
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500 whitespace-nowrap truncate leading-none">
                   {row.title} ({row.items.length})
                 </span>
+                <div className="min-w-0 h-10 flex items-center">
                 {row.items.length === 0 ? (
-                  <span className="text-[11px] text-neutral-600">пока нет — нажмите «2 · Фон»</span>
+                  <span className="text-[11px] text-neutral-600 whitespace-nowrap truncate">пока нет — нажмите «2 · Генерация фона»</span>
                 ) : (
-                  <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                  <div className="flex gap-1.5 overflow-x-auto">
                     {[...row.items].reverse().map((entry, i) => {
                       const active = entry.imageUrl === row.activeUrl;
                       return (
@@ -1690,7 +1691,7 @@ function BeforeAfterViewer({
                           style={{ borderColor: active ? accentColor : '#262626' }}
                         >
                           <img src={entry.imageUrl} alt="" className="w-full h-full object-cover" />
-                          <span className="absolute bottom-0 left-0 right-0 bg-black/70 text-[9px] font-mono text-white text-center leading-tight">
+                          <span className="absolute bottom-0 left-0 right-0 bg-black/70 text-[9px] font-mono text-white text-center leading-tight whitespace-nowrap">
                             v{i + 1} · {entry.timestamp}
                           </span>
                         </button>
@@ -1698,7 +1699,8 @@ function BeforeAfterViewer({
                     })}
                   </div>
                 )}
-              </div>
+                </div>
+              </React.Fragment>
             ))}
           </div>
         );
@@ -2402,7 +2404,7 @@ function Studio({ initialProjects }) {
         id: `hist_${Date.now()}`,
         stage: 'A',
         imageUrl: generatedUrl,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
         prompt: finalPrompt
       };
 
@@ -2475,7 +2477,7 @@ function Studio({ initialProjects }) {
       stage: 'B',
       imageUrl: cleanUrl,
       fromPreviewId: cam.previewId || null,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
       prompt: promptB
     };
 
@@ -2494,7 +2496,7 @@ function Studio({ initialProjects }) {
   const handleGenerateStageBSingle = async () => {
     if (!activeCamera) return;
     if (!activeCamera.previewImage) {
-      showToast('Сначала сгенерируйте превью (кнопка «1 · Превью»)', 'error');
+      showToast('Сначала сгенерируйте превью (кнопка «1 · Генерация превью»)', 'error');
       return;
     }
     setGeneratingCamB(activeCamera.id);
@@ -3368,7 +3370,7 @@ function Studio({ initialProjects }) {
                   className="flex items-center gap-2 px-5 py-2.5 rounded-full hover:brightness-110 disabled:opacity-50 text-black text-xs font-bold tracking-wide transition"
                 >
                   <Sparkles className="w-4 h-4" />
-                  {generatingCamA ? 'Генерируем превью…' : `1 · Превью ${activeCamera?.name}`}
+                  {generatingCamA ? 'Генерируем превью…' : `1 · Генерация превью ${activeCamera?.name}`}
                 </button>
 
                 <button
@@ -3377,7 +3379,7 @@ function Studio({ initialProjects }) {
                   className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#1C1C1C] hover:bg-[#262626] disabled:opacity-40 border border-[#333333] text-white text-xs font-semibold transition"
                 >
                   <Wand2 className="w-3.5 h-3.5" style={{ color: accentColor }} />
-                  {generatingCamB && !batchProgress ? 'Генерируем фон…' : `2 · Фон ${activeCamera?.name}`}
+                  {generatingCamB && !batchProgress ? 'Генерируем фон…' : `2 · Генерация фона ${activeCamera?.name}`}
                 </button>
 
                 <button
@@ -3392,7 +3394,7 @@ function Studio({ initialProjects }) {
                   <Layers className="w-3.5 h-3.5" />
                   {batchProgress
                     ? `Фоны: ${batchProgress.current}/${batchProgress.total} (${batchProgress.camName})`
-                    : 'Фон для всех камер'}
+                    : 'Генерация фона для всех камер'}
                 </button>
               </div>
 
