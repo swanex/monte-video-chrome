@@ -39,6 +39,11 @@ import {
 } from 'lucide-react';
 import { parseBrawMetadata, detectCropFactor } from './braw';
 import { composeOverBackground } from './chromakey';
+import PanoramaPanel from './PanoramaPanel';
+import {
+  activePanoramaVersion, panoramaSignature, cropCameraSector, buildPanoramaPrompt, circularMeanDeg,
+  downscaleImage, imageSize, estimateHfovFromAspect, GENERATED_PANORAMA_HFOV, MIN_PANORAMA_ASPECT
+} from './panorama';
 import { loadProjects, saveProjects, requestPersistentStorage, cleanupUnusedImages, getStorageEstimate } from './storage';
 
 // ============================================================================
@@ -420,7 +425,8 @@ function createDefaultProject(name = 'Интервью — Студия А') {
     furniture: JSON.parse(JSON.stringify(FURNITURE_PRESETS.two_chairs.items)),
     locationRefs: [],
     russianComment: 'Современная светлая лофт-студия с тёплым архитектурным светом, мягким боке на заднем плане и аккуратным декором.',
-    customPromptOverride: ''
+    customPromptOverride: '',
+    panorama: null
   };
 }
 
@@ -473,7 +479,12 @@ function buildAutoPrompt(project, camera, stage = 'A', translatedComment = '') {
     return [
       `TASK: Generate the EMPTY background plate for a green-screen shot (virtual production). Output only the room — no people.`,
       `IMAGE 1 is the real camera frame shot on a green screen. Use it ONLY as a camera reference: read its exact framing, lens perspective, horizon line, camera height and tilt, where the floor is, and the direction, softness and color of the light falling on the speaker. Do NOT copy the speaker or anything green.`,
-      `The following image(s) show the location. Recreate THIS room as seen through exactly the same camera as IMAGE 1, as if the green screen and everyone on it were not there.`,
+      ...(activePanoramaVersion(project)
+        ? [
+            `IMAGE 2 is the exact part of the room that is BEHIND the speaker for this camera, cut from the approved master panorama of the location. The background MUST show this same part of the room: the same walls, doors, windows and furniture in the same left-to-right order and relative positions. Re-render it at full photographic quality with this camera's perspective (straight lines, not panoramic curvature), height, tilt and depth of field.`,
+            `IMAGE 3 is the whole master panorama, for context only (materials, light, what is just outside the frame). Never show parts of the room that are not in IMAGE 2.`
+          ]
+        : [`The following image(s) show the location. Recreate THIS room as seen through exactly the same camera as IMAGE 1, as if the green screen and everyone on it were not there.`]),
       `The real speaker will be keyed out of IMAGE 1 and composited back on top at exactly the same pixel position and scale. Therefore the floor plane, horizon and vanishing points must line up with IMAGE 1 pixel-for-pixel, and the background directly behind the speaker's position must make physical sense at that distance and scale.`,
       `The last image is a top-view plan of the studio: the active camera ${camera.name} is highlighted in lime; its cone shows the viewing direction.`,
       propsLine,
@@ -728,7 +739,7 @@ async function generateImageWithGemini({ prompt, images = [], aspectRatio = '16:
     generationConfig: {
       responseModalities: ['TEXT', 'IMAGE'],
       imageConfig: {
-        aspectRatio: aspectRatio === '9:16' ? '9:16' : '16:9'
+        aspectRatio: ['9:16', '16:9', '21:9'].includes(aspectRatio) ? aspectRatio : '16:9'
       }
     }
   };
@@ -2389,10 +2400,22 @@ function Studio({ initialProjects }) {
     const images = [];
     const inputPart = splitDataUrl(cam.inputImage);
     if (inputPart) images.push(inputPart);
-    activeProject.locationRefs.slice(0, 3).forEach(ref => {
-      const refPart = splitDataUrl(ref.dataUrl);
-      if (refPart) images.push(refPart);
-    });
+    const panoVersion = activePanoramaVersion(activeProject);
+    const panoSig = panoramaSignature(activeProject);
+    if (panoVersion) {
+      // Сектор панорамы, который у этой камеры оказывается за спикером, + вся панорама для контекста
+      const fov = calcHorizontalFovDeg(cam.focalLength, cam.cropFactor);
+      const frameAspect = activeProject.aspectRatio === '9:16' ? 9 / 16 : 16 / 9;
+      const sectorUrl = await cropCameraSector(activeProject, cam, fov, frameAspect);
+      images.push(splitDataUrl(sectorUrl));
+      const panoSmall = await downscaleImage(panoVersion.imageUrl, 2048, 0.88);
+      images.push(splitDataUrl(panoSmall.url));
+    } else {
+      activeProject.locationRefs.slice(0, 3).forEach(ref => {
+        const refPart = splitDataUrl(ref.dataUrl);
+        if (refPart) images.push(refPart);
+      });
+    }
     images.push({ mimeType: 'image/png', data: renderTopViewSnapshotBase64(activeProject, cam.id) });
 
     const bgUrl = await generateImageWithGemini({
@@ -2406,8 +2429,8 @@ function Studio({ initialProjects }) {
 
     const now = Date.now();
     const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    const previewEntry = { id: `hist_${now}_p`, stage: 'A', imageUrl: previewUrl, timestamp: time, prompt: finalPrompt, mode: 'bg+key' };
-    const bgEntry = { id: `hist_${now}_b`, stage: 'B', imageUrl: bgUrl, fromPreviewId: previewEntry.id, timestamp: time, prompt: finalPrompt, mode: 'bg+key' };
+    const previewEntry = { id: `hist_${now}_p`, stage: 'A', imageUrl: previewUrl, timestamp: time, prompt: finalPrompt, mode: 'bg+key', panoramaSig: panoSig };
+    const bgEntry = { id: `hist_${now}_b`, stage: 'B', imageUrl: bgUrl, fromPreviewId: previewEntry.id, timestamp: time, prompt: finalPrompt, mode: 'bg+key', panoramaSig: panoSig };
 
     updateProject(p => ({
       ...p,
@@ -2417,6 +2440,7 @@ function Studio({ initialProjects }) {
         previewId: previewEntry.id,
         cleanPlateImage: bgUrl,
         cleanPlateFromId: previewEntry.id,
+        bgPanoramaSig: panoSig,
         history: [previewEntry, bgEntry, ...(c.history || [])].slice(0, HISTORY_LIMIT)
       })
     }));
@@ -2468,13 +2492,108 @@ function Studio({ initialProjects }) {
             previewImage: entry.imageUrl,
             previewId: entry.id,
             cleanPlateImage: bg ? bg.imageUrl : null,
-            cleanPlateFromId: bg ? entry.id : null
+            cleanPlateFromId: bg ? entry.id : null,
+            bgPanoramaSig: entry.panoramaSig ?? null
           };
         }
         return { ...c, cleanPlateImage: entry.imageUrl, cleanPlateFromId: entry.fromPreviewId || null };
       })
     }));
   };
+
+  // ---- ПАНОРАМА ЛОКАЦИИ ----
+  const [generatingPanorama, setGeneratingPanorama] = useState(false);
+
+  const addPanoramaVersion = (version) => {
+    updateProject(p => {
+      const prev = p.panorama || { versions: [], activeId: null, rotation: 0, baseAz: null };
+      return {
+        ...p,
+        panorama: {
+          ...prev,
+          // Центр панорамы привязываем к среднему направлению камер один раз — дальше только «Поворот»
+          baseAz: prev.baseAz ?? circularMeanDeg(p.cameras.map(c => c.angle)),
+          versions: [...prev.versions, version].slice(-8),
+          activeId: version.id
+        }
+      };
+    });
+  };
+
+  const handleGeneratePanorama = async () => {
+    if (activeProject.locationRefs.length === 0 && !activeProject.russianComment.trim()) {
+      showToast('Для панорамы нужны фото локации или описание в комментарии', 'error');
+      setLeftTab('location');
+      return;
+    }
+    setGeneratingPanorama(true);
+    try {
+      const notes = await translateNotes();
+      const images = activeProject.locationRefs.slice(0, 4).map(r => splitDataUrl(r.dataUrl)).filter(Boolean);
+      const url = await generateImageWithGemini({
+        prompt: buildPanoramaPrompt(activeProject, notes),
+        images,
+        aspectRatio: '21:9',
+        apiKey
+      });
+      addPanoramaVersion({
+        id: `pano_${Date.now()}`,
+        imageUrl: url,
+        source: 'generated',
+        hfov: GENERATED_PANORAMA_HFOV,
+        timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+      });
+      showToast('Панорама готова. Проверьте рамки камер и при необходимости поверните комнату', 'success');
+    } catch (err) {
+      showToast(`Ошибка генерации панорамы: ${err.message}`, 'error');
+    } finally {
+      setGeneratingPanorama(false);
+    }
+  };
+
+  const handleUploadPanorama = (file) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const { width, height } = await imageSize(reader.result);
+        const aspect = width / height;
+        if (aspect < MIN_PANORAMA_ASPECT) {
+          showToast(`Это не панорама: пропорции ${width}×${height}. Нужна широкая картинка — панорама с телефона или кадр не уже 16:9`, 'error');
+          return;
+        }
+        const small = await downscaleImage(reader.result, 8192, 0.9);
+        addPanoramaVersion({
+          id: `pano_${Date.now()}`,
+          imageUrl: small.url,
+          source: 'uploaded',
+          hfov: estimateHfovFromAspect(aspect),
+          timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+        });
+        showToast('Панорама загружена. Охват оценён по пропорциям — поправьте ползунком, если нужно', 'success');
+      } catch (err) {
+        showToast(err.message || 'Не удалось загрузить панораму', 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSelectPanoramaVersion = (id) =>
+    updateProject(p => ({ ...p, panorama: { ...p.panorama, activeId: id } }));
+
+  const handlePanoramaRotation = (deg) =>
+    updateProject(p => ({ ...p, panorama: { ...p.panorama, rotation: deg } }));
+
+  const handlePanoramaHfov = (hfov) =>
+    updateProject(p => ({
+      ...p,
+      panorama: {
+        ...p.panorama,
+        versions: p.panorama.versions.map(v => (v.id === p.panorama.activeId ? { ...v, hfov } : v))
+      }
+    }));
+
+  const currentPanoSig = panoramaSignature(activeProject);
+  const isBgOutdated = (cam) => !!(currentPanoSig && cam.cleanPlateImage && cam.bgPanoramaSig !== currentPanoSig);
 
   const handleGenerateAllBackgrounds = async () => {
     const eligible = activeProject.cameras.filter(c => !!c.inputImage);
@@ -3193,6 +3312,12 @@ function Studio({ initialProjects }) {
                     )}
                   </div>
 
+                  <div className="px-3 py-2 rounded-xl border border-[#262626] bg-[#0E0E0E] text-[11px] text-neutral-400 leading-relaxed">
+                    {activePanoramaVersion(activeProject)
+                      ? <>Панорама: <span style={{ color: accentColor }}>закреплена</span> — фоны камер вырезаются из неё. Управление — в полосе «Панорама локации» под планом.</>
+                      : <>Панорама ещё не создана. По этим фото её можно сгенерировать в полосе «Панорама локации» под планом — тогда все камеры увидят одну и ту же комнату.</>}
+                  </div>
+
                   <div className="bg-[#0E0E0E] border border-[#262626] rounded-xl p-3 space-y-2">
                     <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 block">
                       Комментарий оператора (на русском)
@@ -3322,12 +3447,27 @@ function Studio({ initialProjects }) {
               )}
             </div>
 
+            {/* ==================== ПАНОРАМА ЛОКАЦИИ ==================== */}
+            <PanoramaPanel
+              project={activeProject}
+              activeCameraId={activeCamera?.id}
+              accentColor={accentColor}
+              fovFor={(cam) => calcHorizontalFovDeg(cam.focalLength, cam.cropFactor)}
+              busy={generatingPanorama || !!generatingCamA || !!batchProgress}
+              onGenerate={handleGeneratePanorama}
+              onUpload={handleUploadPanorama}
+              onSelectVersion={handleSelectPanoramaVersion}
+              onRotation={handlePanoramaRotation}
+              onHfov={handlePanoramaHfov}
+              onSelectCamera={setActiveCameraId}
+            />
+
             {/* ==================== GENERATION PIPELINE ACTION BAR ==================== */}
             <div className="bg-[#141414] border border-[#262626] rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   onClick={handleGenerateBackground}
-                  disabled={!!generatingCamA || !!batchProgress}
+                  disabled={!!generatingCamA || !!batchProgress || generatingPanorama}
                   style={{
                     backgroundColor: accentColor,
                     boxShadow: `0 0 24px ${accentAlpha(accentColor, 0.2)}`
@@ -3335,12 +3475,12 @@ function Studio({ initialProjects }) {
                   className="flex items-center gap-2 px-5 py-2.5 rounded-full hover:brightness-110 disabled:opacity-50 text-black text-xs font-bold tracking-wide transition"
                 >
                   <Sparkles className="w-4 h-4" />
-                  {generatingCamA && !batchProgress ? 'Генерируем фон…' : `Сгенерировать фон для ${activeCamera?.name}`}
+                  {generatingCamA && !batchProgress ? 'Генерируем фон…' : `${activePanoramaVersion(activeProject) ? '2 · ' : ''}Сгенерировать фон для ${activeCamera?.name}`}
                 </button>
 
                 <button
                   onClick={handleGenerateAllBackgrounds}
-                  disabled={!!generatingCamA || !!batchProgress || !activeProject.cameras.some(c => c.inputImage)}
+                  disabled={!!generatingCamA || !!batchProgress || generatingPanorama || !activeProject.cameras.some(c => c.inputImage)}
                   style={{
                     borderColor: accentAlpha(accentColor, 0.55),
                     color: accentColor
@@ -3350,7 +3490,7 @@ function Studio({ initialProjects }) {
                   <Layers className="w-3.5 h-3.5" />
                   {batchProgress
                     ? `Фоны: ${batchProgress.current}/${batchProgress.total} (${batchProgress.camName})`
-                    : 'Сгенерировать фон для всех камер'}
+                    : `${activePanoramaVersion(activeProject) ? '2 · ' : ''}Сгенерировать фон для всех камер`}
                 </button>
               </div>
 
@@ -3392,6 +3532,14 @@ function Studio({ initialProjects }) {
                       >
                         {cam.name}
                       </span>
+                      {isBgOutdated(cam) && (
+                        <span
+                          className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-400 text-black"
+                          title="Панорама, её поворот или охват изменились после генерации этого фона"
+                        >
+                          Фон устарел
+                        </span>
+                      )}
                       <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
                         <span className={`w-2 h-2 rounded-full ${cam.inputImage ? 'bg-emerald-400' : 'bg-neutral-700'}`} title="Исходник" />
                         <span className={`w-2 h-2 rounded-full ${cam.previewImage ? 'bg-sky-400' : 'bg-neutral-700'}`} title="Превью" />
