@@ -3557,10 +3557,18 @@ export default function App() {
                   Google AI Studio API Key (Nano Banana 2)
                 </label>
                 <input
-                  type="password"
+                  type="text"
+                  name="gemini-api-key"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  style={{ WebkitTextSecurity: 'disc' }}
                   value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="AIzaSy... (оставьте пустым в Gemini Canvas)"
+                  onChange={(e) => setApiKey(e.target.value.trim())}
+                  placeholder="AIzaSy..."
                   className="w-full bg-[#0B0B0B] border border-[#262626] rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:border-[var(--accent)] outline-none"
                 />
                 <p className="text-[10px] text-neutral-500 mt-2 leading-relaxed">
