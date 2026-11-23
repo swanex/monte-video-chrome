@@ -38,6 +38,7 @@ import {
   Disc
 } from 'lucide-react';
 import { parseBrawMetadata, detectCropFactor } from './braw';
+import { composeOverBackground } from './chromakey';
 import { loadProjects, saveProjects, requestPersistentStorage, cleanupUnusedImages, getStorageEstimate } from './storage';
 
 // ============================================================================
@@ -464,6 +465,23 @@ function buildAutoPrompt(project, camera, stage = 'A', translatedComment = '') {
     `Camera Position & Z-Axis: Top-view coords (X=${camera.x.toFixed(2)}m, Y=${camera.y.toFixed(2)}m), Yaw=${Math.round(camera.angle)}°, Camera Height=${camera.height.toFixed(2)}m above floor, Vertical Tilt=${camera.tilt >= 0 ? '+' : ''}${camera.tilt}°.`,
     `Target Format: ${project.aspectRatio} aspect ratio, ${project.resolution} cinema quality.`
   ].join(' ');
+
+  if (stage === 'BG') {
+    const propsLine = project.furniture.length > 0
+      ? `The on-set props standing on the green screen (${furnitureDesc}) are physical objects that come with the keyed footage — do NOT draw them.`
+      : '';
+    return [
+      `TASK: Generate the EMPTY background plate for a green-screen shot (virtual production). Output only the room — no people.`,
+      `IMAGE 1 is the real camera frame shot on a green screen. Use it ONLY as a camera reference: read its exact framing, lens perspective, horizon line, camera height and tilt, where the floor is, and the direction, softness and color of the light falling on the speaker. Do NOT copy the speaker or anything green.`,
+      `The following image(s) show the location. Recreate THIS room as seen through exactly the same camera as IMAGE 1, as if the green screen and everyone on it were not there.`,
+      `The real speaker will be keyed out of IMAGE 1 and composited back on top at exactly the same pixel position and scale. Therefore the floor plane, horizon and vanishing points must line up with IMAGE 1 pixel-for-pixel, and the background directly behind the speaker's position must make physical sense at that distance and scale.`,
+      `The last image is a top-view plan of the studio: the active camera ${camera.name} is highlighted in lime; its cone shows the viewing direction.`,
+      propsLine,
+      opticsBlock,
+      commentSection,
+      `Output: a photorealistic, completely empty background plate — zero people, zero silhouettes, zero green, zero on-set props, same aspect ratio and framing as IMAGE 1, depth of field and bokeh matching aperture ${camera.aperture}.`
+    ].filter(Boolean).join('\n\n');
+  }
 
   if (stage === 'A') {
     return [
@@ -1551,7 +1569,7 @@ function BeforeAfterViewer({
               style={{ borderTopColor: accentColor }}
             />
             <div className="text-sm font-semibold text-white">
-              {isGeneratingStageA ? 'Генерируем превью…' : 'Генерируем фон…'}
+              {isGeneratingStageA ? 'Генерируем фон и собираем превью…' : 'Генерируем фон…'}
             </div>
             <div className="text-xs text-neutral-400 max-w-xs">
               Учитываем геометрию плана 12×9м, оптику {camera.focalLength}mm ({camera.aperture}) и баланс белого {camera.wbKelvin}K
@@ -1635,7 +1653,7 @@ function BeforeAfterViewer({
           hasPreview ? (
             <img src={camera.previewImage} alt="Final Preview" className="w-full h-full object-contain" />
           ) : (
-            <div className="text-xs text-neutral-500">Сначала сгенерируйте превью (кнопка «1 · Генерация превью»)</div>
+            <div className="text-xs text-neutral-500">Нажмите «Генерация фона» — здесь появится фон с настоящим спикером поверх</div>
           )
         )}
 
@@ -1652,7 +1670,7 @@ function BeforeAfterViewer({
             </div>
           ) : (
             <div className="text-xs text-neutral-500 text-center px-6">
-              Фона для этого превью ещё нет. Нажмите «2 · Генерация фона», когда превью устраивает.
+              Фона ещё нет. Нажмите «Генерация фона».
             </div>
           )
         )}
@@ -1664,9 +1682,13 @@ function BeforeAfterViewer({
         const previews = hist.filter(h => h.stage === 'A');
         const backgrounds = hist.filter(h => h.stage === 'B' && h.fromPreviewId && h.fromPreviewId === camera.previewId);
         if (previews.length === 0) return null;
+        // Каждая генерация даёт пару «фон + превью», поэтому достаточно одной строки версий.
+        // Вторая строка нужна только для старых проектов, где из одного превью делали несколько фонов.
         const rows = [
-          { key: 'A', title: 'Версии превью', items: previews, activeUrl: camera.previewImage, mode: 'preview' },
-          { key: 'B', title: 'Фоны из этого превью', items: backgrounds, activeUrl: camera.cleanPlateImage, mode: 'clean' }
+          { key: 'A', title: 'Версии', items: previews, activeUrl: camera.previewImage, mode: 'compare' },
+          ...(backgrounds.length > 1
+            ? [{ key: 'B', title: 'Фоны из этого превью', items: backgrounds, activeUrl: camera.cleanPlateImage, mode: 'clean' }]
+            : [])
         ];
         return (
           <div className="border-t border-[#1E1E1E] bg-[#0B0B0B] px-3 py-2 grid grid-cols-[minmax(0,13rem)_1fr] items-center gap-x-3 gap-y-1.5">
@@ -1677,7 +1699,7 @@ function BeforeAfterViewer({
                 </span>
                 <div className="min-w-0 h-10 flex items-center">
                 {row.items.length === 0 ? (
-                  <span className="text-[11px] text-neutral-600 whitespace-nowrap truncate">пока нет — нажмите «2 · Генерация фона»</span>
+                  <span className="text-[11px] text-neutral-600 whitespace-nowrap truncate">пока нет</span>
                 ) : (
                   <div className="flex gap-1.5 overflow-x-auto">
                     {[...row.items].reverse().map((entry, i) => {
@@ -2355,74 +2377,76 @@ function Studio({ initialProjects }) {
 
   const autoPromptStageA = useMemo(() => {
     if (!activeCamera) return '';
-    return activeProject.customPromptOverride || buildAutoPrompt(activeProject, activeCamera, 'A');
+    return activeProject.customPromptOverride || buildAutoPrompt(activeProject, activeCamera, 'BG');
   }, [activeProject, activeCamera]);
 
-  // ---- STAGE A: Generate Preview with Speakers ----
-  const handleGenerateStageA = async () => {
-    if (!activeCamera) return;
-    if (!activeCamera.inputImage) {
-      showToast(`Сначала загрузите стоп-кадр (JPG/PNG) для ${activeCamera.name}`, 'error');
-      return;
-    }
+  // ---- ГЕНЕРАЦИЯ: модель рисует пустой фон, приложение кладёт поверх настоящего спикера ----
+  const runBackgroundForCamera = async (cam, translatedNotes) => {
+    const finalPrompt = activeProject.customPromptOverride.trim()
+      ? activeProject.customPromptOverride
+      : buildAutoPrompt(activeProject, cam, 'BG', translatedNotes);
+
+    const images = [];
+    const inputPart = splitDataUrl(cam.inputImage);
+    if (inputPart) images.push(inputPart);
+    activeProject.locationRefs.slice(0, 3).forEach(ref => {
+      const refPart = splitDataUrl(ref.dataUrl);
+      if (refPart) images.push(refPart);
+    });
+    images.push({ mimeType: 'image/png', data: renderTopViewSnapshotBase64(activeProject, cam.id) });
+
+    const bgUrl = await generateImageWithGemini({
+      prompt: finalPrompt,
+      images,
+      aspectRatio: activeProject.aspectRatio,
+      apiKey
+    });
+
+    const previewUrl = await composeOverBackground(cam.inputImage, bgUrl);
+
+    const now = Date.now();
+    const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const previewEntry = { id: `hist_${now}_p`, stage: 'A', imageUrl: previewUrl, timestamp: time, prompt: finalPrompt, mode: 'bg+key' };
+    const bgEntry = { id: `hist_${now}_b`, stage: 'B', imageUrl: bgUrl, fromPreviewId: previewEntry.id, timestamp: time, prompt: finalPrompt, mode: 'bg+key' };
+
+    updateProject(p => ({
+      ...p,
+      cameras: p.cameras.map(c => c.id !== cam.id ? c : {
+        ...c,
+        previewImage: previewUrl,
+        previewId: previewEntry.id,
+        cleanPlateImage: bgUrl,
+        cleanPlateFromId: previewEntry.id,
+        history: [previewEntry, bgEntry, ...(c.history || [])].slice(0, HISTORY_LIMIT)
+      })
+    }));
+  };
+
+  const checkCanGenerate = () => {
     if (activeProject.locationRefs.length === 0 && !activeProject.russianComment.trim()) {
       showToast('Загрузите хотя бы 1 референс локации или опишите её в комментарии', 'error');
       setLeftTab('location');
+      return false;
+    }
+    return true;
+  };
+
+  const translateNotes = () => activeProject.russianComment.trim()
+    ? translateRussianNotesToEnglish(activeProject.russianComment, apiKey)
+    : Promise.resolve('');
+
+  const handleGenerateBackground = async () => {
+    if (!activeCamera) return;
+    if (!activeCamera.inputImage) {
+      showToast(`Сначала загрузите исходник (JPG/PNG) для ${activeCamera.name}`, 'error');
       return;
     }
-
+    if (!checkCanGenerate()) return;
     setGeneratingCamA(activeCamera.id);
     try {
-      const translatedNotes = activeProject.russianComment.trim()
-        ? await translateRussianNotesToEnglish(activeProject.russianComment, apiKey)
-        : '';
-
-      const finalPrompt = activeProject.customPromptOverride.trim()
-        ? activeProject.customPromptOverride
-        : buildAutoPrompt(activeProject, activeCamera, 'A', translatedNotes);
-
-      const images = [];
-      const inputPart = splitDataUrl(activeCamera.inputImage);
-      if (inputPart) images.push(inputPart);
-
-      activeProject.locationRefs.slice(0, 3).forEach(ref => {
-        const refPart = splitDataUrl(ref.dataUrl);
-        if (refPart) images.push(refPart);
-      });
-
-      const topViewBase64 = renderTopViewSnapshotBase64(activeProject, activeCamera.id);
-      images.push({ mimeType: 'image/png', data: topViewBase64 });
-
-      const generatedUrl = await generateImageWithGemini({
-        prompt: finalPrompt,
-        images,
-        aspectRatio: activeProject.aspectRatio,
-        apiKey
-      });
-
-      const historyEntry = {
-        id: `hist_${Date.now()}`,
-        stage: 'A',
-        imageUrl: generatedUrl,
-        timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-        prompt: finalPrompt
-      };
-
-      // Новое превью делает старый фон неактуальным: фон убираем с экрана
-      // (он остаётся в ленте версий своего превью).
-      updateProject(p => ({
-        ...p,
-        cameras: p.cameras.map(c => c.id !== activeCamera.id ? c : {
-          ...c,
-          previewImage: generatedUrl,
-          previewId: historyEntry.id,
-          cleanPlateImage: null,
-          cleanPlateFromId: null,
-          history: [historyEntry, ...(c.history || [])].slice(0, HISTORY_LIMIT)
-        })
-      }));
+      await runBackgroundForCamera(activeCamera, await translateNotes());
       setViewerMode('compare');
-      showToast(`Превью ${activeCamera.name} готово`, 'success');
+      showToast(`Фон ${activeCamera.name} готов — проверьте превью`, 'success');
     } catch (err) {
       showToast(`Ошибка генерации: ${err.message}`, 'error');
     } finally {
@@ -2452,89 +2476,30 @@ function Studio({ initialProjects }) {
     }));
   };
 
-  // ---- STAGE B: Clean Plate ----
-  const runStageBForCamera = async (cam) => {
-    if (!cam.previewImage) {
-      throw new Error(`У ${cam.name} нет превью`);
-    }
-    const promptB = buildAutoPrompt(activeProject, cam, 'B');
-    const images = [];
-    const prevPart = splitDataUrl(cam.previewImage);
-    if (prevPart) images.push(prevPart);
-
-    const topViewBase64 = renderTopViewSnapshotBase64(activeProject, cam.id);
-    images.push({ mimeType: 'image/png', data: topViewBase64 });
-
-    const cleanUrl = await generateImageWithGemini({
-      prompt: promptB,
-      images,
-      aspectRatio: activeProject.aspectRatio,
-      apiKey
-    });
-
-    const historyEntry = {
-      id: `hist_${Date.now()}`,
-      stage: 'B',
-      imageUrl: cleanUrl,
-      fromPreviewId: cam.previewId || null,
-      timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-      prompt: promptB
-    };
-
-    updateProject(p => ({
-      ...p,
-      cameras: p.cameras.map(c => c.id !== cam.id ? c : {
-        ...c,
-        cleanPlateImage: cleanUrl,
-        cleanPlateFromId: historyEntry.fromPreviewId,
-        history: [historyEntry, ...(c.history || [])].slice(0, HISTORY_LIMIT)
-      })
-    }));
-    return cleanUrl;
-  };
-
-  const handleGenerateStageBSingle = async () => {
-    if (!activeCamera) return;
-    if (!activeCamera.previewImage) {
-      showToast('Сначала сгенерируйте превью (кнопка «1 · Генерация превью»)', 'error');
-      return;
-    }
-    setGeneratingCamB(activeCamera.id);
-    try {
-      await runStageBForCamera(activeCamera);
-      setViewerMode('clean');
-      showToast(`Фон ${activeCamera.name} готов`, 'success');
-    } catch (err) {
-      showToast(`Ошибка генерации фона: ${err.message}`, 'error');
-    } finally {
-      setGeneratingCamB(null);
-    }
-  };
-
-  const handleGenerateAllCleanPlates = async () => {
-    const eligible = activeProject.cameras.filter(c => !!c.previewImage);
+  const handleGenerateAllBackgrounds = async () => {
+    const eligible = activeProject.cameras.filter(c => !!c.inputImage);
     if (eligible.length === 0) {
-      showToast('Нет ни одной камеры с готовым превью', 'error');
+      showToast('Ни у одной камеры нет исходника', 'error');
       return;
     }
+    if (!checkCanGenerate()) return;
     setBatchProgress({ current: 0, total: eligible.length, camName: eligible[0].name });
     let successCount = 0;
-
+    const notes = await translateNotes();
     for (let i = 0; i < eligible.length; i++) {
       const cam = eligible[i];
       setBatchProgress({ current: i + 1, total: eligible.length, camName: cam.name });
-      setGeneratingCamB(cam.id);
+      setGeneratingCamA(cam.id);
       try {
-        await runStageBForCamera(cam);
+        await runBackgroundForCamera(cam, notes);
         successCount++;
       } catch (err) {
         showToast(`Ошибка на ${cam.name}: ${err.message}`, 'error');
       }
     }
-
-    setGeneratingCamB(null);
+    setGeneratingCamA(null);
     setBatchProgress(null);
-    setViewerMode('clean');
+    setViewerMode('compare');
     showToast(`Готово фонов: ${successCount} из ${eligible.length}`, 'success');
   };
 
@@ -3361,8 +3326,8 @@ function Studio({ initialProjects }) {
             <div className="bg-[#141414] border border-[#262626] rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2.5">
                 <button
-                  onClick={handleGenerateStageA}
-                  disabled={!!generatingCamA || !!generatingCamB}
+                  onClick={handleGenerateBackground}
+                  disabled={!!generatingCamA || !!batchProgress}
                   style={{
                     backgroundColor: accentColor,
                     boxShadow: `0 0 24px ${accentAlpha(accentColor, 0.2)}`
@@ -3370,21 +3335,12 @@ function Studio({ initialProjects }) {
                   className="flex items-center gap-2 px-5 py-2.5 rounded-full hover:brightness-110 disabled:opacity-50 text-black text-xs font-bold tracking-wide transition"
                 >
                   <Sparkles className="w-4 h-4" />
-                  {generatingCamA ? 'Генерируем превью…' : `1 · Генерация превью ${activeCamera?.name}`}
+                  {generatingCamA && !batchProgress ? 'Генерируем фон…' : `Генерация фона ${activeCamera?.name}`}
                 </button>
 
                 <button
-                  onClick={handleGenerateStageBSingle}
-                  disabled={!!generatingCamA || !!generatingCamB || !activeCamera?.previewImage}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#1C1C1C] hover:bg-[#262626] disabled:opacity-40 border border-[#333333] text-white text-xs font-semibold transition"
-                >
-                  <Wand2 className="w-3.5 h-3.5" style={{ color: accentColor }} />
-                  {generatingCamB && !batchProgress ? 'Генерируем фон…' : `2 · Генерация фона ${activeCamera?.name}`}
-                </button>
-
-                <button
-                  onClick={handleGenerateAllCleanPlates}
-                  disabled={!!generatingCamA || !!generatingCamB || !activeProject.cameras.some(c => c.previewImage)}
+                  onClick={handleGenerateAllBackgrounds}
+                  disabled={!!generatingCamA || !!batchProgress || !activeProject.cameras.some(c => c.inputImage)}
                   style={{
                     borderColor: accentAlpha(accentColor, 0.55),
                     color: accentColor
@@ -3642,7 +3598,16 @@ function Studio({ initialProjects }) {
                 </p>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex items-center justify-between gap-3">
+                <a
+                  href={`https://github.com/swanex/monte-video-chrome/commit/${__APP_COMMIT__}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] font-mono text-neutral-600 hover:text-neutral-300 transition"
+                  title="Версия приложения и код коммита в GitHub"
+                >
+                  v{__APP_VERSION__} · {__APP_COMMIT__.slice(0, 7)} · {new Date(__APP_BUILD_DATE__).toLocaleDateString('ru-RU')}
+                </a>
                 <button
                   onClick={() => { setShowSettingsModal(false); showToast('Установки сохранены', 'success'); }}
                   style={{ backgroundColor: accentColor }}
