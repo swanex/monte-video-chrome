@@ -37,6 +37,7 @@ import {
   Sprout,
   Disc
 } from 'lucide-react';
+import { loadProjects, saveProjects, requestPersistentStorage, cleanupUnusedImages, getStorageEstimate } from './storage';
 
 // ============================================================================
 // CONSTANTS & GEOMETRY (12m x 9m Studio, Fixed Corner Chroma Key)
@@ -2062,7 +2063,7 @@ function TimelineModule({ project, accentColor, onUpdateCamera, onGoToStudio }) 
 // MAIN APPLICATION
 // ============================================================================
 
-export default function App() {
+function Studio({ initialProjects }) {
   // ---- Accent Color (persisted locally to this computer) ----
   const [accentColor, setAccentColor] = useState(() => {
     try {
@@ -2077,12 +2078,11 @@ export default function App() {
     try { localStorage.setItem(STORAGE_KEY_ACCENT, accentColor); } catch {}
   }, [accentColor]);
 
-  // ---- Projects State (persisted safely in localStorage) ----
+  // ---- Projects State (хранятся в IndexedDB, загружаются в <App> до рендера) ----
   const [projects, setProjects] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_PROJECTS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      {
+        const parsed = initialProjects;
         if (Array.isArray(parsed) && parsed.length > 0) {
           // Миграция: фон, у которого неизвестно, из какого превью он сделан,
           // считаем устаревшим и убираем с экрана.
@@ -2145,20 +2145,38 @@ export default function App() {
     setTimeout(() => setToast(prev => (prev?.text === text ? null : prev)), 4200);
   }, []);
 
+  // Автосохранение в IndexedDB с небольшой задержкой (чтобы не писать на каждое движение мыши)
+  const saveErrorShownRef = useRef(false);
+  const latestProjectsRef = useRef(projects);
+  latestProjectsRef.current = projects;
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
-    } catch {
-      try {
-        const slim = projects.map(p => ({
-          ...p,
-          locationRefs: p.locationRefs.slice(0, 1),
-          cameras: p.cameras.map(c => ({ ...c, history: c.history.slice(0, 1) }))
-        }));
-        localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(slim));
-      } catch {}
-    }
-  }, [projects]);
+    const t = setTimeout(() => {
+      saveProjects(projects)
+        .then(() => { saveErrorShownRef.current = false; })
+        .catch(err => {
+          console.error('Save failed', err);
+          if (!saveErrorShownRef.current) {
+            saveErrorShownRef.current = true;
+            showToast('Не удалось сохранить проект в браузере. Скачайте фоны и сделайте «Экспорт .json».', 'error');
+          }
+        });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [projects, showToast]);
+
+  // При закрытии вкладки — сохранить немедленно последнее состояние
+  useEffect(() => {
+    const flush = () => { saveProjects(latestProjectsRef.current).catch(() => {}); };
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, []);
+
+  // Сколько места занимают проекты (показываем в «Установках»)
+  const [storageInfo, setStorageInfo] = useState(null);
+  useEffect(() => {
+    if (!showSettingsModal) return;
+    getStorageEstimate().then(setStorageInfo);
+  }, [showSettingsModal]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_API, apiKey); } catch {}
@@ -2786,10 +2804,10 @@ export default function App() {
           <button
             onClick={() => setShowSettingsModal(true)}
             className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-full bg-[#141414] hover:bg-[#1C1C1C] border border-[#262626] text-neutral-300 hover:text-white text-xs font-medium transition"
-            title="Настройки (API и акцентный цвет)"
+            title="Установки: API-ключ и акцентный цвет"
           >
             <Settings className="w-4 h-4" />
-            <span className="hidden lg:inline">Сетап</span>
+            <span className="hidden lg:inline">Установки</span>
           </button>
         </div>
       </header>
@@ -3575,12 +3593,12 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. Setup Modal (API Key + Safe Accent Color) */}
+      {/* 2. Установки (API-ключ + акцентный цвет + хранилище) */}
       {showSettingsModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#141414] border border-[#262626] rounded-2xl overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#222222]">
-              <h3 className="text-sm font-bold text-white">Сетап приложения</h3>
+              <h3 className="text-sm font-bold text-white">Установки</h3>
               <button onClick={() => setShowSettingsModal(false)} className="text-neutral-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -3679,9 +3697,27 @@ export default function App() {
                 </p>
               </div>
 
+              <div className="h-px bg-[#222222]" />
+
+              {/* Хранилище */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-white">Хранилище проектов</span>
+                  <span className="text-[11px] font-mono text-neutral-400">
+                    {storageInfo?.usage != null
+                      ? `${(storageInfo.usage / 1048576).toFixed(1)} МБ из ${Math.round((storageInfo.quota || 0) / 1073741824)} ГБ`
+                      : '—'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-neutral-500 leading-relaxed">
+                  Проекты и картинки хранятся в этом браузере на этом компьютере (IndexedDB) и сохраняются автоматически.
+                  Если очистить данные браузера, они удалятся — для резервной копии используйте «Экспорт .json» в меню проекта.
+                </p>
+              </div>
+
               <div className="flex justify-end">
                 <button
-                  onClick={() => { setShowSettingsModal(false); showToast('Настройки сетапа сохранены', 'success'); }}
+                  onClick={() => { setShowSettingsModal(false); showToast('Установки сохранены', 'success'); }}
                   style={{ backgroundColor: accentColor }}
                   className="px-5 py-2 rounded-full text-black text-xs font-bold hover:brightness-110 transition"
                 >
@@ -3828,4 +3864,42 @@ export default function App() {
       )}
     </div>
   );
+}
+
+
+// ============================================================================
+// ROOT: загрузка проектов из IndexedDB, затем запуск студии
+// ============================================================================
+
+export default function App() {
+  const [state, setState] = useState({ status: 'loading', projects: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      requestPersistentStorage();
+      try {
+        const projects = await loadProjects();
+        if (!cancelled) setState({ status: 'ready', projects });
+        cleanupUnusedImages().catch(() => {});
+      } catch (err) {
+        console.error('Load failed', err);
+        if (!cancelled) setState({ status: 'ready', projects: null });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (state.status === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#0B0B0B] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-[#262626] border-t-[#D9FF00] animate-spin" />
+          <span className="text-xs text-neutral-500">Загружаем проекты…</span>
+        </div>
+      </div>
+    );
+  }
+
+  return <Studio initialProjects={state.projects} />;
 }
