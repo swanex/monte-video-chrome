@@ -1,0 +1,32 @@
+# CLAUDE.md — контекст проекта «MONTE VIDEO — Проект Хром»
+
+Общение с владельцем — на русском. Владелец не программист: объяснять по-простому, делать самому.
+
+## Продукт
+In-house инструмент студии MONTE VIDEO: генерация консистентных фонов (clean plates) для многокамерной (1–5 камер) съёмки на хромакее. Кеинг, цветокор и монтаж — отдельно в Adobe Premiere Pro. Полное ТЗ v2.1 лежит в Claude-проекте «Hrom MonteVideo» (`gemini-code-1795460833452.md`).
+
+## Деплой
+- Репозиторий → GitHub Actions (`.github/workflows/deploy.yml`) → GitHub Pages → https://hrom.swanex.com
+- `public/CNAME` = `hrom.swanex.com`, `vite.config.ts` base = `/`.
+- Пуш в `main` = выкладка на прод. Перед пушем всегда `npm run build`.
+
+## Стек
+Vite 6 + React 18 + Tailwind v4 (`@tailwindcss/vite`) + lucide-react. TypeScript подключён, но `src/App.tsx` пока под `// @ts-nocheck` (код перенесён из Gemini Canvas без типов).
+
+## Ключевые факты предметной области
+- Студия 12 × 9 м, сетка 1 м / 10 см.
+- Зона хромакея — фиксированный полигон (5.7,0)→(12,0)→(12,5.1)→(9,5.1)→(5.7,1.25). Камеры в неё заходить не могут (Collision Guard).
+- Камеры: Blackmagic Studio Camera 4K Pro (MFT, кроп 2.0), объективы Olympus M.40-150mm F2.8 и др.
+- Метаданные камер вставляются текстом из Premiere → Media File Properties (парсер `parseBrawMetadata`).
+- Пайплайн: Этап А (локация вместо зелёнки со спикерами) → Этап Б (удаление людей, clean plate) → выгрузка `CAM_N_clean.png` в 1080p/2K/4K.
+- API: прямой вызов Google AI Studio (Gemini) из браузера, ключ только в localStorage.
+- Акцентный цвет по умолчанию `#D9FF00`, настраивается в «Сетапе» с защитой контраста.
+
+## Состояние (ноябрь 2026)
+UI проверен владельцем в Gemini Canvas. Функциональная часть **не тестировалась**. Очередь задач:
+1. Проверить актуальные ID моделей Gemini (`gemini-3.1-flash-image`, `gemini-3-flash-preview`), формат `imageConfig`, разрешение 2K/4K, обработку ошибок.
+2. Перенести изображения из localStorage (~5 МБ лимит) в IndexedDB, заложить слой под Supabase Storage.
+3. Проверить рендер Top-View схемы, уходящей в запрос.
+4. Проверить парсер BRAW на реальных дампах из Premiere.
+5. Разбить `App.tsx` на модули: studio-plan, braw-parser, prompt-builder, gemini-client, timeline, storage.
+6. Подключить настоящий логотип `monte-logo.svg` (26×26) вместо нарисованной «M».
