@@ -63,6 +63,7 @@ const STORAGE_KEY_PROJECTS = 'mv_chrome_projects_v1';
 const STORAGE_KEY_API = 'mv_chrome_api_key_v1';
 const STORAGE_KEY_ACCENT = 'mv_chrome_accent_v1';
 const DEFAULT_ACCENT = '#D9FF00';
+const HISTORY_LIMIT = 16;
 
 const SAFE_ACCENT_PRESETS = [
   { name: 'Кислотный лайм', hex: '#D9FF00' },
@@ -176,7 +177,7 @@ const FURNITURE_PRESETS = {
 };
 
 const MOTION_PRESETS = [
-  { id: 'static', label: 'Статика (Clean Plate)' },
+  { id: 'static', label: 'Статика' },
   { id: 'push_in', label: 'Медленный наезд (Push-In)' },
   { id: 'pull_out', label: 'Плавный отъезд (Pull-Out)' },
   { id: 'pan_left', label: 'Панорама влево (Pan Left)' },
@@ -544,13 +545,19 @@ function buildAutoPrompt(project, camera, stage = 'A', translatedComment = '') {
     ].filter(Boolean).join('\n\n');
   }
 
+  const onSetProps = project.furniture.length > 0
+    ? `Also remove ALL on-set foreground furniture and props that the speakers use or that stand in the chroma-key zone: ${furnitureDesc}. These are physical objects on the green-screen stage; they will be composited back from the keyed camera footage, so they must NOT appear in the background plate. Remove their shadows and contact shadows on the floor as well.`
+    : '';
+
   return [
-    `TASK: Photorealistic Clean Plate generation (Stage B — Remove All People / Speakers).`,
-    `Using the approved Stage A preview image as the exact spatial and lighting reference, completely remove all human speakers/characters from the frame and reconstruct the occluded background interior and furniture seamlessly.`,
-    `CRITICAL CONSISTENCY: Keep the exact camera perspective, framing, wall geometry, furniture/decor placement, shadows, reflections, bokeh, and ${camera.wbKelvin}K lighting 100% identical to the Stage A image so it composites seamlessly in Adobe Premiere Pro.`,
+    `TASK: Photorealistic empty background plate (Stage B — empty location for compositing).`,
+    `Using the attached Stage A preview image as the exact spatial and lighting reference, produce the SAME location completely empty: remove every person (speakers, silhouettes, reflections of people).`,
+    onSetProps,
+    `Reconstruct the floor, walls and background that were hidden behind the removed people and objects, continuing the existing textures, lines and lighting naturally.`,
+    `KEEP: the location's own architecture and background decor that is part of the room itself (walls, windows, shelves, lamps, distant furniture far behind the set) exactly as in the Stage A image.`,
+    `CRITICAL CONSISTENCY: Keep the exact camera perspective, framing, horizon, wall geometry, depth of field, bokeh, and ${camera.wbKelvin}K lighting 100% identical to the Stage A image so the keyed speaker footage composites seamlessly on top in Adobe Premiere Pro.`,
     opticsBlock,
-    `Furniture & Props to keep cleanly reconstructed: ${furnitureDesc}.`,
-    `Output a completely empty, clean background plate with zero people, zero silhouettes, and zero artifacts.`
+    `Output: a clean, empty background plate with zero people, zero on-set furniture, zero silhouettes, zero artifacts.`
   ].filter(Boolean).join('\n\n');
 }
 
@@ -1534,7 +1541,8 @@ function BeforeAfterViewer({
   setViewMode,
   isGeneratingStageA,
   isGeneratingStageB,
-  onUploadInput
+  onUploadInput,
+  onSelectVersion
 }) {
   const [sliderPos, setSliderPos] = useState(50);
   const containerRef = useRef(null);
@@ -1585,10 +1593,10 @@ function BeforeAfterViewer({
 
         <div className="flex items-center gap-1 bg-[#0B0B0B] p-1 rounded-full border border-[#262626]">
           {[
-            { id: 'compare', label: 'INPUT / FINAL' },
-            { id: 'input', label: 'INPUT' },
-            { id: 'preview', label: 'FINAL' },
-            { id: 'clean', label: 'CLEAN PLATE' }
+            { id: 'compare', label: 'Сравнение' },
+            { id: 'input', label: 'Исходник' },
+            { id: 'preview', label: 'Превью' },
+            { id: 'clean', label: 'Фон' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -1617,7 +1625,7 @@ function BeforeAfterViewer({
               style={{ borderTopColor: accentColor }}
             />
             <div className="text-sm font-semibold text-white">
-              {isGeneratingStageA ? 'Этап А: Генерация локации (Nano Banana 2)...' : 'Этап Б: Удаление спикеров (Clean Plate)...'}
+              {isGeneratingStageA ? 'Генерируем превью…' : 'Генерируем фон…'}
             </div>
             <div className="text-xs text-neutral-400 max-w-xs">
               Учитываем геометрию плана 12×9м, оптику {camera.focalLength}mm ({camera.aperture}) и баланс белого {camera.wbKelvin}K
@@ -1670,20 +1678,20 @@ function BeforeAfterViewer({
                 </div>
 
                 <span className="absolute top-3 left-3 z-10 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider bg-black/75 text-emerald-400 border border-emerald-500/30">
-                  INPUT (ЗЕЛЁНКА)
+                  ИСХОДНИК
                 </span>
                 <span
                   className="absolute top-3 right-3 z-10 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider bg-black/75 border"
                   style={{ color: accentColor, borderColor: accentAlpha(accentColor, 0.35) }}
                 >
-                  FINAL (ЛОКАЦИЯ)
+                  ПРЕВЬЮ
                 </span>
               </>
             )}
 
             {hasInput && !hasPreview && (
               <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider bg-black/75 text-emerald-400 border border-emerald-500/30">
-                INPUT — ГОТОВ К ГЕНЕРАЦИИ
+                ИСХОДНИК · ГОТОВ К ГЕНЕРАЦИИ
               </span>
             )}
           </>
@@ -1701,28 +1709,74 @@ function BeforeAfterViewer({
           hasPreview ? (
             <img src={camera.previewImage} alt="Final Preview" className="w-full h-full object-contain" />
           ) : (
-            <div className="text-xs text-neutral-500">Сначала сгенерируйте превью (Этап А)</div>
+            <div className="text-xs text-neutral-500">Сначала сгенерируйте превью (кнопка «1 · Превью»)</div>
           )
         )}
 
         {viewMode === 'clean' && (
           hasClean ? (
             <div className="relative w-full h-full flex items-center justify-center">
-              <img src={camera.cleanPlateImage} alt="Clean Plate" className="w-full h-full object-contain" />
+              <img src={camera.cleanPlateImage} alt="Фон" className="w-full h-full object-contain" />
               <span
                 className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider text-black"
                 style={{ backgroundColor: accentColor }}
               >
-                CLEAN PLATE READY
+                ФОН ГОТОВ
               </span>
             </div>
           ) : (
             <div className="text-xs text-neutral-500 text-center px-6">
-              Чистый задник (Этап Б) ещё не создан. Нажмите «Удалить спикеров (Clean Plate)» после утверждения превью.
+              Фона для этого превью ещё нет. Нажмите «2 · Фон», когда превью устраивает.
             </div>
           )
         )}
       </div>
+
+      {/* Лента версий: превью камеры и фоны, сделанные из текущего превью */}
+      {(() => {
+        const hist = camera.history || [];
+        const previews = hist.filter(h => h.stage === 'A');
+        const backgrounds = hist.filter(h => h.stage === 'B' && h.fromPreviewId && h.fromPreviewId === camera.previewId);
+        if (previews.length === 0) return null;
+        const rows = [
+          { key: 'A', title: 'Версии превью', items: previews, activeUrl: camera.previewImage, mode: 'preview' },
+          { key: 'B', title: 'Фоны из этого превью', items: backgrounds, activeUrl: camera.cleanPlateImage, mode: 'clean' }
+        ];
+        return (
+          <div className="border-t border-[#1E1E1E] bg-[#0B0B0B] px-3 py-2.5 space-y-2">
+            {rows.map(row => (
+              <div key={row.key} className="flex items-center gap-2 min-w-0">
+                <span className="w-36 shrink-0 text-[10px] uppercase tracking-wider text-neutral-500">
+                  {row.title} ({row.items.length})
+                </span>
+                {row.items.length === 0 ? (
+                  <span className="text-[11px] text-neutral-600">пока нет — нажмите «2 · Фон»</span>
+                ) : (
+                  <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                    {[...row.items].reverse().map((entry, i) => {
+                      const active = entry.imageUrl === row.activeUrl;
+                      return (
+                        <button
+                          key={entry.id}
+                          onClick={() => { onSelectVersion(entry); setViewMode(row.mode); }}
+                          title={`Версия ${i + 1} · ${entry.timestamp}`}
+                          className="relative shrink-0 w-16 aspect-video rounded-md overflow-hidden border-2 transition"
+                          style={{ borderColor: active ? accentColor : '#262626' }}
+                        >
+                          <img src={entry.imageUrl} alt="" className="w-full h-full object-cover" />
+                          <span className="absolute bottom-0 left-0 right-0 bg-black/70 text-[9px] font-mono text-white text-center leading-tight">
+                            v{i + 1} · {entry.timestamp}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1788,7 +1842,7 @@ function TimelineModule({ project, accentColor, onUpdateCamera, onGoToStudio }) 
               />
             ) : (
               <div className="text-center p-6">
-                <p className="text-sm text-neutral-400">Для {activeCam?.name} ещё нет утверждённого Clean Plate</p>
+                <p className="text-sm text-neutral-400">Для {activeCam?.name} ещё нет готового фона</p>
                 <button
                   onClick={onGoToStudio}
                   style={{ backgroundColor: accentColor }}
@@ -1801,7 +1855,7 @@ function TimelineModule({ project, accentColor, onUpdateCamera, onGoToStudio }) 
 
             {activeCam && (
               <div className="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-black/75 border border-[#262626] text-[11px] font-mono text-white">
-                {activeCam.cleanPlateImage ? 'CLEAN PLATE' : activeCam.previewImage ? 'STAGE A PREVIEW' : 'INPUT'} · {
+                {activeCam.cleanPlateImage ? 'ФОН' : activeCam.previewImage ? 'ПРЕВЬЮ' : 'ИСХОДНИК'} · {
                   MOTION_PRESETS.find(m => m.id === activeCam.timelineClip?.motion)?.label || 'Статика'
                 }
               </div>
@@ -1899,7 +1953,7 @@ function TimelineModule({ project, accentColor, onUpdateCamera, onGoToStudio }) 
           </div>
 
           <div className="mt-4 p-3 rounded-xl bg-[#0E0E0E] border border-[#262626] text-[11px] text-neutral-400 leading-relaxed">
-            В версии v1 таймлайн сохраняет разметку отрезков <span className="text-white">Start / End</span> и статичные Clean Plates для каждой камеры проекта. Подключение видео-генерации (Kling API) запланировано в v2.
+            В версии v1 таймлайн сохраняет разметку отрезков <span className="text-white">Start / End</span> и готовые фоны для каждой камеры проекта. Подключение видео-генерации (Kling API) запланировано в v2.
           </div>
         </div>
       </div>
@@ -1987,7 +2041,7 @@ function TimelineModule({ project, accentColor, onUpdateCamera, onGoToStudio }) 
                     )}
                     <div className="min-w-0">
                       <div className="text-[11px] font-semibold text-white truncate">
-                        {cam.cleanPlateImage ? `${cam.name}_clean.png` : `${cam.name} (нет Clean Plate)`}
+                        {cam.cleanPlateImage ? `${cam.name}_clean.png` : `${cam.name} (нет фона)`}
                       </div>
                       <div className="text-[10px] font-mono text-neutral-400 truncate">
                         {clip.startSec}s → {clip.endSec}s · {clip.motion}
@@ -2029,7 +2083,18 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEY_PROJECTS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Миграция: фон, у которого неизвестно, из какого превью он сделан,
+          // считаем устаревшим и убираем с экрана.
+          return parsed.map(p => ({
+            ...p,
+            cameras: (p.cameras || []).map(c =>
+              c.cleanPlateImage && c.cleanPlateFromId === undefined
+                ? { ...c, cleanPlateImage: null, cleanPlateFromId: null }
+                : c
+            )
+          }));
+        }
       }
     } catch {
       // Fallback to default
@@ -2398,12 +2463,21 @@ export default function App() {
         prompt: finalPrompt
       };
 
-      updateCamera(activeCamera.id, {
-        previewImage: generatedUrl,
-        history: [historyEntry, ...(activeCamera.history || []).slice(0, 9)]
-      });
+      // Новое превью делает старый фон неактуальным: фон убираем с экрана
+      // (он остаётся в ленте версий своего превью).
+      updateProject(p => ({
+        ...p,
+        cameras: p.cameras.map(c => c.id !== activeCamera.id ? c : {
+          ...c,
+          previewImage: generatedUrl,
+          previewId: historyEntry.id,
+          cleanPlateImage: null,
+          cleanPlateFromId: null,
+          history: [historyEntry, ...(c.history || [])].slice(0, HISTORY_LIMIT)
+        })
+      }));
       setViewerMode('compare');
-      showToast(`Превью (Этап А) для ${activeCamera.name} готово!`, 'success');
+      showToast(`Превью ${activeCamera.name} готово`, 'success');
     } catch (err) {
       showToast(`Ошибка генерации: ${err.message}`, 'error');
     } finally {
@@ -2411,10 +2485,32 @@ export default function App() {
     }
   };
 
+  // ---- Выбор версии из ленты ----
+  const handleSelectVersion = (camId, entry) => {
+    updateProject(p => ({
+      ...p,
+      cameras: p.cameras.map(c => {
+        if (c.id !== camId) return c;
+        const hist = c.history || [];
+        if (entry.stage === 'A') {
+          const bg = hist.find(h => h.stage === 'B' && h.fromPreviewId === entry.id);
+          return {
+            ...c,
+            previewImage: entry.imageUrl,
+            previewId: entry.id,
+            cleanPlateImage: bg ? bg.imageUrl : null,
+            cleanPlateFromId: bg ? entry.id : null
+          };
+        }
+        return { ...c, cleanPlateImage: entry.imageUrl, cleanPlateFromId: entry.fromPreviewId || null };
+      })
+    }));
+  };
+
   // ---- STAGE B: Clean Plate ----
   const runStageBForCamera = async (cam) => {
     if (!cam.previewImage) {
-      throw new Error(`У ${cam.name} нет превью Этапа А`);
+      throw new Error(`У ${cam.name} нет превью`);
     }
     const promptB = buildAutoPrompt(activeProject, cam, 'B');
     const images = [];
@@ -2435,30 +2531,36 @@ export default function App() {
       id: `hist_${Date.now()}`,
       stage: 'B',
       imageUrl: cleanUrl,
+      fromPreviewId: cam.previewId || null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       prompt: promptB
     };
 
-    updateCamera(cam.id, {
-      cleanPlateImage: cleanUrl,
-      history: [historyEntry, ...(cam.history || []).slice(0, 9)]
-    });
+    updateProject(p => ({
+      ...p,
+      cameras: p.cameras.map(c => c.id !== cam.id ? c : {
+        ...c,
+        cleanPlateImage: cleanUrl,
+        cleanPlateFromId: historyEntry.fromPreviewId,
+        history: [historyEntry, ...(c.history || [])].slice(0, HISTORY_LIMIT)
+      })
+    }));
     return cleanUrl;
   };
 
   const handleGenerateStageBSingle = async () => {
     if (!activeCamera) return;
     if (!activeCamera.previewImage) {
-      showToast('Сначала сгенерируйте и утвердите превью (Этап А)', 'error');
+      showToast('Сначала сгенерируйте превью (кнопка «1 · Превью»)', 'error');
       return;
     }
     setGeneratingCamB(activeCamera.id);
     try {
       await runStageBForCamera(activeCamera);
       setViewerMode('clean');
-      showToast(`Чистый задник (Clean Plate) для ${activeCamera.name} готов!`, 'success');
+      showToast(`Фон ${activeCamera.name} готов`, 'success');
     } catch (err) {
-      showToast(`Ошибка Этапа Б: ${err.message}`, 'error');
+      showToast(`Ошибка генерации фона: ${err.message}`, 'error');
     } finally {
       setGeneratingCamB(null);
     }
@@ -2467,7 +2569,7 @@ export default function App() {
   const handleGenerateAllCleanPlates = async () => {
     const eligible = activeProject.cameras.filter(c => !!c.previewImage);
     if (eligible.length === 0) {
-      showToast('Нет ни одной камеры с готовым превью Этапа А', 'error');
+      showToast('Нет ни одной камеры с готовым превью', 'error');
       return;
     }
     setBatchProgress({ current: 0, total: eligible.length, camName: eligible[0].name });
@@ -2488,13 +2590,13 @@ export default function App() {
     setGeneratingCamB(null);
     setBatchProgress(null);
     setViewerMode('clean');
-    showToast(`Пакетная генерация завершена: ${successCount} из ${eligible.length} Clean Plates`, 'success');
+    showToast(`Готово фонов: ${successCount} из ${eligible.length}`, 'success');
   };
 
   const handleDownloadAllCleanPlates = () => {
     const ready = activeProject.cameras.filter(c => !!c.cleanPlateImage);
     if (ready.length === 0) {
-      showToast('Пока нет готовых Clean Plates для скачивания', 'info');
+      showToast('Пока нет готовых фонов для скачивания', 'info');
       return;
     }
     ready.forEach((cam, idx) => {
@@ -3305,6 +3407,7 @@ export default function App() {
                   isGeneratingStageA={generatingCamA === activeCamera.id}
                   isGeneratingStageB={generatingCamB === activeCamera.id}
                   onUploadInput={handleUploadCameraInput}
+                  onSelectVersion={(entry) => handleSelectVersion(activeCamera.id, entry)}
                 />
               )}
             </div>
@@ -3322,7 +3425,7 @@ export default function App() {
                   className="flex items-center gap-2 px-5 py-2.5 rounded-full hover:brightness-110 disabled:opacity-50 text-black text-xs font-bold tracking-wide transition"
                 >
                   <Sparkles className="w-4 h-4" />
-                  {generatingCamA ? 'Генерация Этапа А...' : `Этап А: Превью (${activeCamera?.name})`}
+                  {generatingCamA ? 'Генерируем превью…' : `1 · Превью ${activeCamera?.name}`}
                 </button>
 
                 <button
@@ -3331,7 +3434,7 @@ export default function App() {
                   className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#1C1C1C] hover:bg-[#262626] disabled:opacity-40 border border-[#333333] text-white text-xs font-semibold transition"
                 >
                   <Wand2 className="w-3.5 h-3.5" style={{ color: accentColor }} />
-                  Удалить спикеров (Clean Plate)
+                  {generatingCamB && !batchProgress ? 'Генерируем фон…' : `2 · Фон ${activeCamera?.name}`}
                 </button>
 
                 <button
@@ -3345,8 +3448,8 @@ export default function App() {
                 >
                   <Layers className="w-3.5 h-3.5" />
                   {batchProgress
-                    ? `Clean Plates: ${batchProgress.current}/${batchProgress.total} (${batchProgress.camName})`
-                    : 'Generate All Clean Plates'}
+                    ? `Фоны: ${batchProgress.current}/${batchProgress.total} (${batchProgress.camName})`
+                    : 'Фон для всех камер'}
                 </button>
               </div>
 
@@ -3356,7 +3459,7 @@ export default function App() {
                 className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#1C1C1C] hover:bg-[#262626] disabled:opacity-40 border border-[#2A2A2A] text-xs font-semibold text-white transition"
               >
                 <Download className="w-3.5 h-3.5" style={{ color: accentColor }} />
-                Download All ({cleanPlatesCount})
+                Скачать фоны ({cleanPlatesCount})
               </button>
             </div>
 
@@ -3389,12 +3492,12 @@ export default function App() {
                         {cam.name}
                       </span>
                       <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1">
-                        <span className={`w-2 h-2 rounded-full ${cam.inputImage ? 'bg-emerald-400' : 'bg-neutral-700'}`} title="Input" />
-                        <span className={`w-2 h-2 rounded-full ${cam.previewImage ? 'bg-sky-400' : 'bg-neutral-700'}`} title="Stage A Preview" />
+                        <span className={`w-2 h-2 rounded-full ${cam.inputImage ? 'bg-emerald-400' : 'bg-neutral-700'}`} title="Исходник" />
+                        <span className={`w-2 h-2 rounded-full ${cam.previewImage ? 'bg-sky-400' : 'bg-neutral-700'}`} title="Превью" />
                         <span
                           className="w-2 h-2 rounded-full"
                           style={{ backgroundColor: cam.cleanPlateImage ? accentColor : '#404040' }}
-                          title="Stage B Clean Plate"
+                          title="Фон"
                         />
                       </div>
                     </div>
@@ -3597,7 +3700,7 @@ export default function App() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#222222]">
               <div>
                 <h3 className="text-sm font-bold text-white">История и Ассеты проекта ({activeProject.resolution} · {activeProject.aspectRatio})</h3>
-                <p className="text-xs text-neutral-400 mt-0.5">Готовые чистые задники для монтажа в Adobe Premiere Pro</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Готовые фоны для монтажа в Adobe Premiere Pro</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -3606,7 +3709,7 @@ export default function App() {
                   style={{ backgroundColor: accentColor }}
                   className="flex items-center gap-1.5 px-4 py-1.5 rounded-full disabled:opacity-40 text-black text-xs font-bold"
                 >
-                  <Download className="w-3.5 h-3.5" /> Download All ({cleanPlatesCount})
+                  <Download className="w-3.5 h-3.5" /> Скачать фоны ({cleanPlatesCount})
                 </button>
                 <button onClick={() => setShowAssetsModal(false)} className="text-neutral-400 hover:text-white p-1">
                   <X className="w-5 h-5" />
@@ -3641,9 +3744,9 @@ export default function App() {
 
                   <div className="grid grid-cols-3 gap-2.5">
                     {[
-                      { label: 'INPUT (Зелёнка)', src: cam.inputImage },
-                      { label: 'Этап А (Превью)', src: cam.previewImage },
-                      { label: 'Этап Б (Clean Plate)', src: cam.cleanPlateImage }
+                      { label: 'Исходник', src: cam.inputImage },
+                      { label: 'Превью', src: cam.previewImage },
+                      { label: 'Фон', src: cam.cleanPlateImage }
                     ].map((slot, i) => (
                       <div key={i} className="rounded-lg overflow-hidden border border-[#222222] bg-[#080808]">
                         <div className="aspect-video flex items-center justify-center">
