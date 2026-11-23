@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState } from 'react';
 import { useElapsed, formatElapsed } from './useElapsed';
-import { GalleryHorizontal as Panorama, Upload, Sparkles, RotateCw, MoveHorizontal, AlertTriangle, Maximize2, Minimize2 } from 'lucide-react';
+import { GalleryHorizontal as Panorama, Upload, Sparkles, RotateCw, MoveHorizontal, AlertTriangle } from 'lucide-react';
 import { cameraSector, activePanoramaVersion } from './panorama';
 
 function hexToRgba(hex, a) {
@@ -42,7 +42,6 @@ export default function PanoramaPanel({
   const pano = project.panorama;
   const active = activePanoramaVersion(project);
   const versions = pano?.versions || [];
-  const [large, setLarge] = useState(false);
   const [ratio, setRatio] = useState(21 / 9);
   const elapsed = useElapsed(generating);
 
@@ -56,41 +55,29 @@ export default function PanoramaPanel({
   );
 
   return (
-    <div className="bg-[#0E0E0E] border border-[#262626] rounded-2xl overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-[#1E1E1E] bg-[#121212]">
-        <div className="flex items-center gap-2 min-w-0">
-          <Panorama className="w-4 h-4 shrink-0" style={{ color: accentColor }} />
-          <span className="text-xs font-semibold tracking-wide text-white uppercase">Панорама локации</span>
-          {active ? (
-            <span className="text-[11px] text-neutral-400 truncate">
-              · {active.source === 'uploaded' ? 'загружена' : 'сгенерирована'} · охват {active.hfov}° · v{versions.length - versions.indexOf(active)}
+    <div className="bg-[#0E0E0E] border border-[#262626] rounded-xl overflow-hidden">
+      <div className="px-3 pt-3 pb-2 space-y-2">
+        <div className="flex items-center gap-1.5">
+          <Panorama className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Панорама локации</span>
+          {active && (
+            <span className="text-[10px] text-neutral-500 truncate">
+              · {active.source === 'uploaded' ? 'своя' : 'сгенерирована'} · {active.hfov}°
             </span>
-          ) : (
-            <span className="text-[11px] text-neutral-500">· нет — фоны генерируются без привязки к общей комнате</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {active && (
-            <button
-              onClick={() => setLarge(v => !v)}
-              title={large ? 'Уменьшить панораму' : 'Показать панораму крупнее'}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1C1C] hover:bg-[#262626] border border-[#333333] text-xs font-medium text-neutral-300 hover:text-white transition"
-            >
-              {large ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              {large ? 'Меньше' : 'Крупнее'}
-            </button>
-          )}
+        <div className="flex flex-wrap gap-1.5">
           <button
             onClick={onGenerate}
             disabled={busy}
             style={{ backgroundColor: accentColor }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-black text-xs font-bold hover:brightness-110 disabled:opacity-50 transition"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-black text-[11px] font-semibold hover:brightness-110 disabled:opacity-50 transition"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            {busy ? 'Генерируем панораму…' : '1 · Сгенерировать панораму'}
+            <Sparkles className="w-3 h-3" />
+            {generating ? 'Генерируем…' : (active ? 'Сгенерировать заново' : 'Сгенерировать панораму')}
           </button>
-          <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1C1C1C] hover:bg-[#262626] border border-[#333333] text-xs font-medium text-white cursor-pointer transition">
-            <Upload className="w-3.5 h-3.5" style={{ color: accentColor }} />
+          <label className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1C1C1C] hover:bg-[#262626] border border-[#333333] text-[11px] font-medium text-white cursor-pointer transition">
+            <Upload className="w-3 h-3" style={{ color: accentColor }} />
             Загрузить свою
             {fileInput}
           </label>
@@ -99,33 +86,28 @@ export default function PanoramaPanel({
 
       <div className="relative">
       {generating && (
-        <div className="absolute inset-0 z-20 min-h-[180px] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-6 text-center">
-          <div className="w-10 h-10 shrink-0 rounded-full border-2 border-[#262626] animate-spin" style={{ borderTopColor: accentColor }} />
-          <div className="text-sm font-semibold text-white">
-            Генерируем панораму локации <span className="font-mono" style={{ color: accentColor }}>{formatElapsed(elapsed)}</span>
+        <div className="absolute inset-0 z-20 min-h-[150px] bg-black/85 flex flex-col items-center justify-center gap-2 p-3 text-center">
+          <div className="w-7 h-7 shrink-0 rounded-full border-2 border-[#262626] animate-spin" style={{ borderTopColor: accentColor }} />
+          <div className="text-xs font-semibold text-white">
+            Генерируем панораму <span className="font-mono" style={{ color: accentColor }}>{formatElapsed(elapsed)}</span>
           </div>
-          <div className="text-xs text-neutral-400 max-w-lg leading-relaxed">
+          <div className="text-[10px] text-neutral-400 leading-relaxed">
             Отправили модели: {[refsCount > 0 ? `фото локации (${refsCount})` : null, hasNotes ? 'комментарий оператора' : null].filter(Boolean).join(' и ') || 'только задание'}.
-            Задание: одна широкая панорама 21:9 с охватом около 150°, горизонт посередине, без людей и без мебели на переднем плане.
-            <br />Обычно это 20–60 секунд. Потом на панораме появятся рамки камер.
+            Задание: широкая панорама 21:9, охват ~150°, без людей и мебели. Обычно 20–60 секунд.
           </div>
         </div>
       )}
       {!active ? (
-        <div className={`px-4 py-5 text-[11px] text-neutral-500 leading-relaxed ${generating ? 'min-h-[180px]' : ''}`}>
-          Панорама — одна широкая картинка комнаты, общая для всех камер. По плану приложение вычисляет, какой её кусок
-          окажется за спикером у каждой камеры, поэтому камеры с разных сторон видят одну и ту же комнату.
-          Сгенерируйте панораму по фото локации или загрузите свою: панораму с телефона или широкий кадр (не уже 16:9).
+        <div className={`px-3 pb-3 text-[10px] text-neutral-500 leading-relaxed ${generating ? 'min-h-[150px]' : ''}`}>
+          Общая комната для всех камер: по плану приложение вычисляет, какой её кусок окажется за спикером у каждой
+          камеры. Сгенерируйте по фото выше или загрузите свою (панорама с телефона или кадр не уже 16:9).
         </div>
       ) : (
-        <div className="p-3 space-y-3">
+        <div className="px-3 pb-3 space-y-2.5">
           {/* Панорама с рамками камер */}
-          <div className="flex justify-center bg-black rounded-lg">
-          {/* Панорама вписывается в ширину полосы, но не выше 42% (или 80%) экрана; рамки камер привязаны к самой картинке */}
-          <div
-            className="relative rounded-lg overflow-hidden select-none"
-            style={{ width: `min(100%, calc(${large ? 80 : 42}vh * ${ratio}))`, aspectRatio: String(ratio) }}
-          >
+          <div className="bg-black rounded-lg">
+          {/* Узкая полоса во всю ширину колонки; рамки камер привязаны к самой картинке */}
+          <div className="relative w-full rounded-lg overflow-hidden select-none" style={{ aspectRatio: String(ratio) }}>
             <img
               src={active.imageUrl}
               alt="Панорама локации"
@@ -154,15 +136,15 @@ export default function PanoramaPanel({
                 >
                   {i === 0 && (
                     <span
-                      className="absolute left-1 top-1 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap"
+                      className="absolute left-0.5 top-0.5 px-1 rounded text-[9px] font-bold whitespace-nowrap"
                       style={{ backgroundColor: isActive ? accentColor : 'rgba(0,0,0,0.75)', color: isActive ? '#0B0B0B' : '#FFFFFF' }}
                     >
-                      {cam.name} · {Math.round(fovFor(cam))}°
+                      {cam.name.replace('CAM ', 'C')}
                     </span>
                   )}
                   {i === 0 && sector.outside && (
-                    <span className="absolute left-1 bottom-1 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-400 text-black whitespace-nowrap">
-                      <AlertTriangle className="w-3 h-3" /> за краем панорамы
+                    <span className="absolute left-0.5 bottom-0.5 flex items-center px-0.5 rounded bg-amber-400 text-black" title="Камера смотрит за край панорамы">
+                      <AlertTriangle className="w-3 h-3" />
                     </span>
                   )}
                 </button>
@@ -172,10 +154,10 @@ export default function PanoramaPanel({
           </div>
 
           {/* Настройки привязки */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-2">
             <div>
               <div className="flex justify-between text-[11px] text-neutral-400 mb-1">
-                <span className="flex items-center gap-1.5"><RotateCw className="w-3 h-3" /> Поворот комнаты относительно студии</span>
+                <span className="flex items-center gap-1.5"><RotateCw className="w-3 h-3" /> Поворот комнаты</span>
                 <span className="font-mono text-white">{pano.rotation || 0}°</span>
               </div>
               <input
@@ -203,7 +185,7 @@ export default function PanoramaPanel({
 
           {/* Версии панорамы */}
           <div className="flex items-center gap-3">
-            <span className="text-[10px] uppercase tracking-wider text-neutral-500 whitespace-nowrap">Версии ({versions.length})</span>
+            <span className="text-[10px] uppercase tracking-wider text-neutral-500 whitespace-nowrap">Версии</span>
             <div className="flex gap-1.5 overflow-x-auto">
               {[...versions].reverse().map((v, i) => {
                 const isSel = v.id === active.id;
@@ -212,7 +194,7 @@ export default function PanoramaPanel({
                     key={v.id}
                     onClick={() => onSelectVersion(v.id)}
                     title={`${v.source === 'uploaded' ? 'Загружена' : 'Сгенерирована'} · ${v.timestamp}`}
-                    className="relative shrink-0 h-10 aspect-[21/9] rounded-md overflow-hidden border-2 transition"
+                    className="relative shrink-0 h-8 aspect-[21/9] rounded overflow-hidden border-2 transition"
                     style={{ borderColor: isSel ? accentColor : '#262626' }}
                   >
                     <img src={v.imageUrl} alt="" className="w-full h-full object-cover" />

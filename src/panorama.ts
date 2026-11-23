@@ -4,7 +4,8 @@
 // который окажется за спикером. Этот кусок вырезается геометрически и отдаётся модели
 // как жёсткая подсказка — так разные камеры гарантированно видят одну и ту же комнату.
 //
-// Модель панорамы — цилиндрическая: горизонталь линейна по углу.
+// Модель панорамы — цилиндрическая: горизонталь линейна по углу, снята из центра сцены (среднее положение спикеров).
+// Рамка камеры = куда её лучи обзора упираются в «стены» (окружность радиуса ROOM_RADIUS_M вокруг спикеров).
 // Направление «вправо» на панораме = рост угла на плане (ось Y плана смотрит вниз).
 
 export const GENERATED_PANORAMA_HFOV = 150;
@@ -43,6 +44,36 @@ export function panoramaCenterAz(project) {
   return (p.baseAz ?? -90) + (p.rotation || 0);
 }
 
+/** Радиус «стен» виртуальной комнаты вокруг спикеров, м. Фон за спикером считаем на этом расстоянии. */
+export const ROOM_RADIUS_M = 6;
+
+/** Центр сцены — среднее положение спикеров (или середина зоны хромакея, если спикеров нет). */
+export function sceneCenter(project) {
+  const sp = project.speakers || [];
+  if (sp.length) {
+    return { x: sp.reduce((a, s) => a + s.x, 0) / sp.length, y: sp.reduce((a, s) => a + s.y, 0) / sp.length };
+  }
+  return { x: 9.6, y: 2.4 };
+}
+
+/**
+ * Азимут (от центра сцены) точки, где луч из камеры под углом rayDeg упирается в стены комнаты.
+ * Комната — окружность радиуса R вокруг спикеров. Из-за этого на рамку влияет
+ * и поворот камеры, и её положение на плане (параллакс).
+ */
+function wallAzimuth(cam, rayDeg, S, R) {
+  const dx = Math.cos((rayDeg * Math.PI) / 180);
+  const dy = Math.sin((rayDeg * Math.PI) / 180);
+  const fx = cam.x - S.x, fy = cam.y - S.y;
+  // |F + t·D|² = R²  →  t² + 2(F·D)t + |F|² − R² = 0, берём положительный корень
+  const b = fx * dx + fy * dy;
+  const c = fx * fx + fy * fy - R * R;
+  const disc = b * b - c;
+  const t = -b + Math.sqrt(Math.max(0, disc));
+  const px = fx + t * dx, py = fy + t * dy;
+  return (Math.atan2(py, px) * 180) / Math.PI;
+}
+
 /**
  * Сектор камеры на панораме в долях ширины [0..1].
  * fovDeg — горизонтальный угол обзора камеры (с учётом кропа).
@@ -50,9 +81,16 @@ export function panoramaCenterAz(project) {
 export function cameraSector(project, camera, fovDeg) {
   const v = activePanoramaVersion(project);
   if (!v) return null;
-  const d = angDiff(camera.angle, panoramaCenterAz(project));
-  const left = 0.5 + (d - fovDeg / 2) / v.hfov;
-  const right = 0.5 + (d + fovDeg / 2) / v.hfov;
+  const S = sceneCenter(project);
+  const distToScene = Math.hypot(camera.x - S.x, camera.y - S.y);
+  const R = Math.max(ROOM_RADIUS_M, distToScene + 1); // камера всегда внутри «комнаты»
+  const center = panoramaCenterAz(project);
+  const toFrac = (az) => 0.5 + angDiff(az, center) / v.hfov;
+  const azL = wallAzimuth(camera, camera.angle - fovDeg / 2, S, R);
+  const azR = wallAzimuth(camera, camera.angle + fovDeg / 2, S, R);
+  let left = toFrac(azL);
+  let right = toFrac(azR);
+  if (right < left) right += 360 / v.hfov; // сектор переходит через «шов» панорамы 360°
   const outside = v.hfov < 360 && (left < -0.001 || right > 1.001);
   return { left, right, outside };
 }

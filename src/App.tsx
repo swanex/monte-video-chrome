@@ -3318,11 +3318,23 @@ function Studio({ initialProjects }) {
                     )}
                   </div>
 
-                  <div className="px-3 py-2 rounded-xl border border-[#262626] bg-[#0E0E0E] text-[11px] text-neutral-400 leading-relaxed">
-                    {activePanoramaVersion(activeProject)
-                      ? <>Панорама: <span style={{ color: accentColor }}>закреплена</span> — фоны камер вырезаются из неё. Управление — в полосе «Панорама локации» под планом.</>
-                      : <>Панорама ещё не создана. По этим фото её можно сгенерировать в полосе «Панорама локации» под планом — тогда все камеры увидят одну и ту же комнату.</>}
-                  </div>
+                  {/* Панорама локации: узкая полоса с рамками камер (вспомогательная разметка) */}
+                  <PanoramaPanel
+                    project={activeProject}
+                    activeCameraId={activeCamera?.id}
+                    accentColor={accentColor}
+                    fovFor={(cam) => calcHorizontalFovDeg(cam.focalLength, cam.cropFactor)}
+                    busy={generatingPanorama || !!generatingCamA || !!batchProgress}
+                    generating={generatingPanorama}
+                    refsCount={Math.min(4, activeProject.locationRefs.length)}
+                    hasNotes={!!activeProject.russianComment.trim()}
+                    onGenerate={handleGeneratePanorama}
+                    onUpload={handleUploadPanorama}
+                    onSelectVersion={handleSelectPanoramaVersion}
+                    onRotation={handlePanoramaRotation}
+                    onHfov={handlePanoramaHfov}
+                    onSelectCamera={setActiveCameraId}
+                  />
 
                   <div className="bg-[#0E0E0E] border border-[#262626] rounded-xl p-3 space-y-2">
                     <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 block">
@@ -3454,24 +3466,6 @@ function Studio({ initialProjects }) {
               )}
             </div>
 
-            {/* ==================== ПАНОРАМА ЛОКАЦИИ ==================== */}
-            <PanoramaPanel
-              project={activeProject}
-              activeCameraId={activeCamera?.id}
-              accentColor={accentColor}
-              fovFor={(cam) => calcHorizontalFovDeg(cam.focalLength, cam.cropFactor)}
-              busy={generatingPanorama || !!generatingCamA || !!batchProgress}
-              generating={generatingPanorama}
-              refsCount={Math.min(4, activeProject.locationRefs.length)}
-              hasNotes={!!activeProject.russianComment.trim()}
-              onGenerate={handleGeneratePanorama}
-              onUpload={handleUploadPanorama}
-              onSelectVersion={handleSelectPanoramaVersion}
-              onRotation={handlePanoramaRotation}
-              onHfov={handlePanoramaHfov}
-              onSelectCamera={setActiveCameraId}
-            />
-
             {/* ==================== GENERATION PIPELINE ACTION BAR ==================== */}
             <div className="bg-[#141414] border border-[#262626] rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2.5">
@@ -3485,7 +3479,7 @@ function Studio({ initialProjects }) {
                   className="flex items-center gap-2 px-5 py-2.5 rounded-full hover:brightness-110 disabled:opacity-50 text-black text-xs font-bold tracking-wide transition"
                 >
                   <Sparkles className="w-4 h-4" />
-                  {generatingCamA && !batchProgress ? 'Генерируем фон…' : `${activePanoramaVersion(activeProject) ? '2 · ' : ''}Сгенерировать фон для ${activeCamera?.name}`}
+                  {generatingCamA && !batchProgress ? 'Генерируем фон…' : `Сгенерировать фон для ${activeCamera?.name}`}
                 </button>
 
                 <button
@@ -3500,7 +3494,7 @@ function Studio({ initialProjects }) {
                   <Layers className="w-3.5 h-3.5" />
                   {batchProgress
                     ? `Фоны: ${batchProgress.current}/${batchProgress.total} (${batchProgress.camName})`
-                    : `${activePanoramaVersion(activeProject) ? '2 · ' : ''}Сгенерировать фон для всех камер`}
+                    : 'Сгенерировать фон для всех камер'}
                 </button>
               </div>
 
