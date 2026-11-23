@@ -1653,7 +1653,7 @@ function BeforeAfterViewer({
           hasPreview ? (
             <img src={camera.previewImage} alt="Final Preview" className="w-full h-full object-contain" />
           ) : (
-            <div className="text-xs text-neutral-500">Нажмите «Генерация фона» — здесь появится фон с настоящим спикером поверх</div>
+            <div className="text-xs text-neutral-500">Нажмите «Сгенерировать фон» — здесь появится фон с настоящим спикером поверх</div>
           )
         )}
 
@@ -1670,7 +1670,7 @@ function BeforeAfterViewer({
             </div>
           ) : (
             <div className="text-xs text-neutral-500 text-center px-6">
-              Фона ещё нет. Нажмите «Генерация фона».
+              Фона ещё нет. Нажмите «Сгенерировать фон».
             </div>
           )
         )}
@@ -3335,7 +3335,7 @@ function Studio({ initialProjects }) {
                   className="flex items-center gap-2 px-5 py-2.5 rounded-full hover:brightness-110 disabled:opacity-50 text-black text-xs font-bold tracking-wide transition"
                 >
                   <Sparkles className="w-4 h-4" />
-                  {generatingCamA && !batchProgress ? 'Генерируем фон…' : `Генерация фона ${activeCamera?.name}`}
+                  {generatingCamA && !batchProgress ? 'Генерируем фон…' : `Сгенерировать фон для ${activeCamera?.name}`}
                 </button>
 
                 <button
@@ -3350,7 +3350,7 @@ function Studio({ initialProjects }) {
                   <Layers className="w-3.5 h-3.5" />
                   {batchProgress
                     ? `Фоны: ${batchProgress.current}/${batchProgress.total} (${batchProgress.camName})`
-                    : 'Генерация фона для всех камер'}
+                    : 'Сгенерировать фон для всех камер'}
                 </button>
               </div>
 
