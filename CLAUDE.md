@@ -25,18 +25,18 @@ Vite 6 + React 18 + Tailwind v4 (`@tailwindcss/vite`) + lucide-react. TypeScript
 ## Ключевые факты предметной области
 - Студия 12 × 9 м, сетка 1 м / 10 см.
 - Зона хромакея — фиксированный полигон (5.7,0)→(12,0)→(12,5.1)→(9,5.1)→(5.7,1.25). Камеры в неё заходить не могут (Collision Guard).
-- Камеры: Blackmagic Studio Camera 4K Pro (MFT, кроп 2.0), объективы Olympus M.40-150mm F2.8 и др.
-- Метаданные камер вставляются текстом из Premiere → Media File Properties (парсер `parseBrawMetadata`).
+- Камеры: Blackmagic Studio Camera 4K Pro (MFT, кроп ≈2.02), Pocket Cinema Camera 6K Pro (Super 35, кроп ≈1.56; в оконных режимах больше — считается по Crop Size). Объективы Olympus M.40-150mm F2.8, Sigma 18-35mm f/1.8 DC и др. Таблица сенсоров — `SENSORS` в `src/braw.ts`.
+- Метаданные камер вставляются текстом из Premiere → Media File Properties (парсер `parseBrawMetadata` в `src/braw.ts`, проверен на реальном дампе BMPCC 6K Pro).
 - Пайплайн: Этап А (локация вместо зелёнки со спикерами) → Этап Б (удаление людей, clean plate) → выгрузка `CAM_N_clean.png` в 1080p/2K/4K.
 - API: прямой вызов Google AI Studio (Gemini) из браузера, ключ только в localStorage.
 - Проекты и картинки — в IndexedDB (`src/storage.ts`): картинки отдельно по хэшу, проект хранит ссылки `idb:<ключ>`. Автосохранение с задержкой 300 мс, очистка неиспользуемых картинок при загрузке. Старые данные из localStorage переносятся автоматически.
-- Акцентный цвет по умолчанию `#D9FF00`, настраивается в «Сетапе» с защитой контраста.
+- Акцентный цвет по умолчанию `#D9FF00`, настраивается в «Установках» с защитой контраста.
 
 ## Состояние (ноябрь 2026)
 Сайт работает на hrom.swanex.com. Генерация превью и фона проверена владельцем на реальном ключе. Очередь задач:
 1. Проверить актуальные ID моделей Gemini (`gemini-3.1-flash-image`, `gemini-3-flash-preview`), формат `imageConfig`, разрешение 2K/4K, обработку ошибок.
 2. ~~IndexedDB~~ — сделано. Позже: Supabase Storage для доступа с разных компьютеров (заменить реализацию в `src/storage.ts`).
 3. Проверить рендер Top-View схемы, уходящей в запрос.
-4. Проверить парсер BRAW на реальных дампах из Premiere.
-5. Разбить `App.tsx` на модули: studio-plan, braw-parser, prompt-builder, gemini-client, timeline, storage.
-6. Подключить настоящий логотип `monte-logo.svg` (26×26) вместо нарисованной «M».
+4. ~~Парсер BRAW~~ — проверен на BMPCC 6K Pro. Нужен ещё реальный дамп со Studio Camera 4K Pro.
+5. Разбить `App.tsx` на модули. Уже вынесены: `src/braw.ts`, `src/storage.ts`. Осталось: studio-plan, prompt-builder, gemini-client, timeline.
+6. ~~Логотип~~ — M в круге из `monte-logo.svg` (полный файл в `src/assets/monte-logo-full.svg`), он же фавикон.

@@ -37,6 +37,7 @@ import {
   Sprout,
   Disc
 } from 'lucide-react';
+import { parseBrawMetadata, detectCropFactor } from './braw';
 import { loadProjects, saveProjects, requestPersistentStorage, cleanupUnusedImages, getStorageEstimate } from './storage';
 
 // ============================================================================
@@ -355,76 +356,6 @@ function calcHorizontalFovDeg(focalLengthMm, cropFactor = 2.0) {
   const eqFl = fl * cf;
   const fovRad = 2 * Math.atan(36 / (2 * eqFl));
   return clamp((fovRad * 180) / Math.PI, 8, 120);
-}
-
-function detectCropFactor(cameraType = '') {
-  const lower = cameraType.toLowerCase();
-  if (lower.includes('studio camera') || lower.includes('pocket cinema camera 4k') || lower.includes('bmpcc 4k') || lower.includes('mft') || lower.includes('gh5') || lower.includes('gh6')) {
-    return 2.0;
-  }
-  if (lower.includes('6k') && !lower.includes('full frame') && !lower.includes('cinema camera 6k')) {
-    return 1.56;
-  }
-  if (lower.includes('ursa') || lower.includes('s35') || lower.includes('super 35') || lower.includes('fx30') || lower.includes('komodo')) {
-    return 1.5;
-  }
-  if (lower.includes('full frame') || lower.includes('fx3') || lower.includes('fx6') || lower.includes('a7') || lower.includes('r5') || lower.includes('pyxis') || lower.includes('cinema camera 6k')) {
-    return 1.0;
-  }
-  return 2.0;
-}
-
-function parseBrawMetadata(rawText) {
-  const result = {};
-  const lines = rawText.split(/\r?\n/);
-
-  const extract = (patterns) => {
-    for (const line of lines) {
-      for (const pat of patterns) {
-        const match = line.match(pat);
-        if (match && match[1]) return match[1].trim();
-      }
-    }
-    return null;
-  };
-
-  const cameraType = extract([/Camera\s*Type\s*[:=]\s*(.+)/i, /Camera\s*Model\s*[:=]\s*(.+)/i]);
-  if (cameraType) {
-    result.cameraType = cameraType;
-    result.cropFactor = detectCropFactor(cameraType);
-  }
-
-  const lensType = extract([/Lens\s*Type\s*[:=]\s*(.+)/i, /Lens\s*Model\s*[:=]\s*(.+)/i]);
-  if (lensType) result.lensType = lensType;
-
-  const focalRaw = extract([/Focal\s*Length\s*[:=]\s*([\d.]+)/i]);
-  if (focalRaw) result.focalLength = parseFloat(focalRaw);
-
-  const apertureRaw = extract([/Aperture\s*[:=]\s*f?\/?([\d.]+)/i]);
-  if (apertureRaw) result.aperture = `f${parseFloat(apertureRaw).toFixed(1)}`;
-
-  const wbKelvin = extract([/White\s*Balance\s*Kelvin\s*[:=]\s*(\d+)/i, /Color\s*Temp(?:erature)?\s*[:=]\s*(\d+)/i]);
-  if (wbKelvin) result.wbKelvin = parseInt(wbKelvin, 10);
-
-  const wbTint = extract([/(?:White\s*Balance\s*)?Tint\s*[:=]\s*([+-]?\d+)/i]);
-  if (wbTint !== null) result.wbTint = parseInt(wbTint, 10);
-
-  const distance = extract([/Distance\s*[:=]\s*(.+)/i, /Focus\s*Distance\s*[:=]\s*(.+)/i]);
-  if (distance) result.distance = distance;
-
-  const iso = extract([/\bISO\s*[:=]\s*(\d+)/i]);
-  if (iso) result.iso = parseInt(iso, 10);
-
-  const shutter = extract([/Shutter\s*(?:Value|Angle)?\s*[:=]\s*(.+)/i]);
-  if (shutter) result.shutter = shutter;
-
-  const camNum = extract([/Camera\s*Number\s*[:=]\s*(\w+)/i]);
-  if (camNum) result.cameraNumber = camNum;
-
-  const colorSpace = extract([/Color\s*Space\s*[:=]\s*(.+)/i]);
-  if (colorSpace) result.colorSpace = colorSpace;
-
-  return result;
 }
 
 // ============================================================================
@@ -839,15 +770,9 @@ function downloadImageAtResolution(dataUrl, filename, resolution = '1080p', aspe
 function MonteVideoLogo() {
   return (
     <div className="flex items-center gap-2.5 select-none">
-      <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-        <circle cx="13" cy="13" r="12" fill="#FFFFFF" />
-        <path
-          d="M7.5 18V8.5L13 14.5L18.5 8.5V18"
-          stroke="#0B0B0B"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+      <svg width="26" height="26" viewBox="1008.8 197.22 85.04 85.04" fill="#FFFFFF" xmlns="http://www.w3.org/2000/svg" className="shrink-0" aria-label="MONTE VIDEO">
+        <polygon points="1050.96 248.52 1040.77 210.75 1035.12 210.75 1035.12 259.21 1040.77 259.21 1040.77 231.98 1048.22 259.21 1053.77 259.21 1060.87 232.54 1060.87 268.73 1066.52 268.73 1066.52 210.75 1060.87 210.75 1050.96 248.52" />
+        <path d="M1051.32,197.22c-23.45,0-42.52,19.07-42.52,42.52s19.07,42.52,42.52,42.52,42.52-19.07,42.52-42.52-19.07-42.52-42.52-42.52ZM1051.32,277.42c-20.78,0-37.68-16.9-37.68-37.68s16.9-37.68,37.68-37.68,37.68,16.9,37.68,37.68-16.9,37.68-37.68,37.68Z" />
       </svg>
       <div className="flex flex-col leading-none">
         <span className="text-white font-bold tracking-[0.14em] text-sm">MONTE VIDEO</span>
