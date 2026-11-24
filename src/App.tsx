@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { parseBrawMetadata, detectCropFactor } from './braw';
 import { composeOverBackground } from './chromakey';
+import { onAccent, accentInk } from './accent';
 import PanoramaPanel from './PanoramaPanel';
 import { useElapsed, formatElapsed } from './useElapsed';
 import {
@@ -271,14 +272,14 @@ function hslToRgb(h, s, l) {
  */
 function enforceSafeAccentColor(hex) {
   let { r, g, b } = hexToRgb(hex);
-  if (relativeLuminance(r, g, b) >= 0.42) {
+  if (relativeLuminance(r, g, b) >= 0.12) {
     return rgbToHex(r, g, b);
   }
   const hsl = rgbToHsl(r, g, b);
-  let l = Math.max(hsl.l, 0.56);
+  let l = Math.max(hsl.l, 0.4);
   for (let i = 0; i < 20; i++) {
     const candidate = hslToRgb(hsl.h, hsl.s, l);
-    if (relativeLuminance(candidate.r, candidate.g, candidate.b) >= 0.44 || l >= 0.92) {
+    if (relativeLuminance(candidate.r, candidate.g, candidate.b) >= 0.13 || l >= 0.92) {
       return rgbToHex(candidate.r, candidate.g, candidate.b);
     }
     l = Math.min(0.92, l + 0.03);
@@ -846,7 +847,7 @@ function SideViewElevation({ camera, speakers, furniture, accentColor, onChange 
         <span className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
           Вертикальный профиль (Ось Z)
         </span>
-        <span className="text-[11px] font-mono" style={{ color: accentColor }}>
+        <span className="text-[11px] font-mono" style={{ color: accentInk(accentColor) }}>
           H: {camera.height.toFixed(2)}m · {camera.tilt > 0 ? `+${camera.tilt}°` : `${camera.tilt}°`}
         </span>
       </div>
@@ -1098,14 +1099,15 @@ function StudioTopViewCanvas({
     <div className="relative w-full bg-[#0E0E0E] border border-[#262626] rounded-2xl overflow-hidden select-none">
       {/* Top Overlay Header */}
       <div className="flex items-center justify-between gap-6 px-4 py-2.5 border-b border-[#1E1E1E] bg-[#121212]">
-        <div className="flex items-center gap-2 min-w-0">
-          <Compass className="w-4 h-4 shrink-0" style={{ color: accentColor }} />
+        {/* Иконка и чипса выравниваются по первой строке заголовка, а не по центру двух строк */}
+        <div className="flex items-start gap-2 min-w-0">
+          <Compass className="w-4 h-4 shrink-0 -mt-px" style={{ color: accentInk(accentColor) }} />
           {/* Переносится целиком «(Top-View)», а не посреди размеров */}
           <span className="text-xs font-semibold tracking-wide text-white uppercase leading-tight">
             <span className="whitespace-nowrap">План студии 12&nbsp;м&nbsp;×&nbsp;9&nbsp;м</span>{' '}
             <span className="whitespace-nowrap">(Top-View)</span>
           </span>
-          <span className="hidden sm:inline-flex shrink-0 items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] bg-[#1C1C1C] text-neutral-400 border border-[#262626]">
+          <span className="hidden sm:inline-flex shrink-0 items-center whitespace-nowrap px-2 py-0.5 -mt-[3px] leading-[14px] rounded-full text-[10px] bg-[#1C1C1C] text-neutral-400 border border-[#262626]">
             Сетка: 1&nbsp;м&nbsp;/&nbsp;10&nbsp;см
           </span>
         </div>
@@ -1420,7 +1422,7 @@ function StudioTopViewCanvas({
                     stroke={isActive ? accentColor : '#737373'}
                     strokeWidth="2"
                   />
-                  <circle r="2.5" fill={isActive ? accentColor : '#A3A3A3'} />
+                  <circle r="2.5" fill={isActive ? accentInk(accentColor) : '#A3A3A3'} />
                 </g>
 
                 <g
@@ -1445,7 +1447,7 @@ function StudioTopViewCanvas({
                   />
                   <text
                     y="4"
-                    fill={isActive ? '#0B0B0B' : '#FFFFFF'}
+                    fill={isActive ? onAccent(accentColor) : '#FFFFFF'}
                     fontSize="10"
                     fontWeight="bold"
                     textAnchor="middle"
@@ -1467,7 +1469,7 @@ function StudioTopViewCanvas({
                     />
                     <text
                       y="3"
-                      fill={isActive ? accentColor : '#A3A3A3'}
+                      fill={isActive ? accentInk(accentColor) : '#A3A3A3'}
                       fontSize="9"
                       fontFamily="monospace"
                       textAnchor="middle"
@@ -1541,7 +1543,7 @@ function BeforeAfterViewer({
     <div className="bg-[#0E0E0E] border border-[#262626] rounded-2xl overflow-hidden flex flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-[#1E1E1E] bg-[#121212]">
         <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold text-black" style={{ backgroundColor: accentColor }}>
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold text-[var(--accent-on)]" style={{ backgroundColor: accentColor }}>
             {camera.name}
           </span>
           <span className="text-xs text-neutral-400 font-mono">
@@ -1559,7 +1561,7 @@ function BeforeAfterViewer({
             <button
               key={tab.id}
               onClick={() => setViewMode(tab.id)}
-              style={viewMode === tab.id ? { backgroundColor: accentColor, color: '#0B0B0B' } : undefined}
+              style={viewMode === tab.id ? { backgroundColor: accentColor, color: onAccent(accentColor) } : undefined}
               className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition ${
                 viewMode === tab.id ? 'font-semibold' : 'text-neutral-400 hover:text-white'
               }`}
@@ -1583,7 +1585,7 @@ function BeforeAfterViewer({
               style={{ borderTopColor: accentColor }}
             />
             <div className="text-sm font-semibold text-white">
-              Генерируем фон для {camera.name} <span className="font-mono" style={{ color: accentColor }}>{formatElapsed(elapsed)}</span>
+              Генерируем фон для {camera.name} <span className="font-mono" style={{ color: accentInk(accentColor) }}>{formatElapsed(elapsed)}</span>
             </div>
             <div className="text-xs text-neutral-400 max-w-sm leading-relaxed">
               Отправили модели: исходник {camera.name}
@@ -1631,7 +1633,7 @@ function BeforeAfterViewer({
                   onTouchStart={() => setIsSliding(true)}
                 >
                   <div
-                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full text-black shadow-lg flex items-center justify-center"
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full text-[var(--accent-on)] shadow-lg flex items-center justify-center"
                     style={{ backgroundColor: accentColor }}
                   >
                     <SlidersHorizontal className="w-4 h-4" />
@@ -1643,7 +1645,7 @@ function BeforeAfterViewer({
                 </span>
                 <span
                   className="absolute top-3 right-3 z-10 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider bg-black/75 border"
-                  style={{ color: accentColor, borderColor: accentAlpha(accentColor, 0.35) }}
+                  style={{ color: accentInk(accentColor), borderColor: accentAlpha(accentColor, 0.35) }}
                 >
                   ПРЕВЬЮ
                 </span>
@@ -1679,7 +1681,7 @@ function BeforeAfterViewer({
             <div className="relative w-full h-full flex items-center justify-center">
               <img src={camera.cleanPlateImage} alt="Фон" className="w-full h-full object-contain" />
               <span
-                className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider text-black"
+                className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider text-[var(--accent-on)]"
                 style={{ backgroundColor: accentColor }}
               >
                 ФОН ГОТОВ
@@ -1786,7 +1788,7 @@ function TimelineModule({ project, accentColor, onUpdateCamera, onGoToStudio }) 
         <div className="lg:col-span-8 bg-[#141414] border border-[#262626] rounded-2xl overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#262626]">
             <div className="flex items-center gap-2">
-              <Film className="w-4 h-4" style={{ color: accentColor }} />
+              <Film className="w-4 h-4" style={{ color: accentInk(accentColor) }} />
               <span className="text-xs font-semibold uppercase tracking-wider text-white">
                 Монитор таймлайна · {activeCam?.name || 'CAM 1'}
               </span>
@@ -1794,7 +1796,7 @@ function TimelineModule({ project, accentColor, onUpdateCamera, onGoToStudio }) 
                 v1 Разметка (Kling Video API в v2)
               </span>
             </div>
-            <div className="text-xs font-mono" style={{ color: accentColor }}>
+            <div className="text-xs font-mono" style={{ color: accentInk(accentColor) }}>
               00:{String(Math.floor(playheadSec)).padStart(2, '0')}:{String(Math.floor((playheadSec % 1) * 25)).padStart(2, '0')} / 00:{totalDuration}:00
             </div>
           </div>
@@ -1813,7 +1815,7 @@ function TimelineModule({ project, accentColor, onUpdateCamera, onGoToStudio }) 
                 <button
                   onClick={onGoToStudio}
                   style={{ backgroundColor: accentColor }}
-                  className="mt-3 px-4 py-1.5 rounded-full text-black text-xs font-semibold hover:brightness-110 transition"
+                  className="mt-3 px-4 py-1.5 rounded-full text-[var(--accent-on)] text-xs font-semibold hover:brightness-110 transition"
                 >
                   Перейти в Модуль 1: Студия
                 </button>
@@ -1834,7 +1836,7 @@ function TimelineModule({ project, accentColor, onUpdateCamera, onGoToStudio }) 
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
                 style={{ backgroundColor: accentColor }}
-                className="w-9 h-9 rounded-full text-black flex items-center justify-center hover:brightness-110 transition"
+                className="w-9 h-9 rounded-full text-[var(--accent-on)] flex items-center justify-center hover:brightness-110 transition"
                 title={isPlaying ? 'Пауза' : 'Воспроизвести предпросмотр движения'}
               >
                 {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
@@ -1874,7 +1876,7 @@ function TimelineModule({ project, accentColor, onUpdateCamera, onGoToStudio }) 
                           style={active ? {
                             backgroundColor: accentAlpha(accentColor, 0.12),
                             borderColor: accentColor,
-                            color: accentColor
+                            color: accentInk(accentColor)
                           } : undefined}
                           className={`px-3 py-2 rounded-xl text-left text-xs font-medium border transition ${
                             active ? '' : 'bg-[#0E0E0E] border-[#262626] text-neutral-300 hover:border-neutral-600'
@@ -2657,7 +2659,7 @@ function Studio({ initialProjects }) {
 
   return (
     <div
-      style={{ '--accent': accentColor }}
+      style={{ '--accent': accentInk(accentColor), '--accent-on': onAccent(accentColor) }}
       className="min-h-screen bg-[#0B0B0B] text-white font-sans flex flex-col"
     >
       {/* ==================== TOP NAVIGATION HEADER ==================== */}
@@ -2673,7 +2675,7 @@ function Studio({ initialProjects }) {
               onClick={() => setShowProjectMenu(!showProjectMenu)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#141414] hover:bg-[#1C1C1C] border border-[#262626] text-xs font-medium text-white transition max-w-[200px] sm:max-w-[240px]"
             >
-              <FolderOpen className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} />
+              <FolderOpen className="w-3.5 h-3.5 shrink-0" style={{ color: accentInk(accentColor) }} />
               <span className="truncate">{activeProject.name}</span>
               <ChevronDown className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
             </button>
@@ -2695,7 +2697,7 @@ function Studio({ initialProjects }) {
                             setActiveProjectId(p.id);
                             setShowProjectMenu(false);
                           }}
-                          style={isCur ? { backgroundColor: accentAlpha(accentColor, 0.12), color: accentColor } : undefined}
+                          style={isCur ? { backgroundColor: accentAlpha(accentColor, 0.12), color: accentInk(accentColor) } : undefined}
                           className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left text-xs transition ${
                             isCur ? 'font-semibold' : 'text-neutral-300 hover:bg-[#1E1E1E]'
                           }`}
@@ -2714,11 +2716,11 @@ function Studio({ initialProjects }) {
                       onClick={() => { setShowProjectMenu(false); setNewProjectModal(true); }}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-white hover:bg-[#1E1E1E] transition"
                     >
-                      <Plus className="w-3.5 h-3.5" style={{ color: accentColor }} /> Создать новый проект
+                      <Plus className="w-3.5 h-3.5" style={{ color: accentInk(accentColor) }} /> Создать новый проект
                     </button>
                     <button
                       onClick={handleDuplicateProject}
-                      style={{ color: accentColor }}
+                      style={{ color: accentInk(accentColor) }}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs hover:bg-[#1E1E1E] font-medium transition"
                     >
                       <Copy className="w-3.5 h-3.5" /> Дублировать проект
@@ -2752,7 +2754,7 @@ function Studio({ initialProjects }) {
         <div className="hidden md:flex items-center bg-[#141414] border border-[#262626] p-1 rounded-full">
           <button
             onClick={() => setActiveModule('studio')}
-            style={activeModule === 'studio' ? { backgroundColor: accentColor, color: '#0B0B0B' } : undefined}
+            style={activeModule === 'studio' ? { backgroundColor: accentColor, color: onAccent(accentColor) } : undefined}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition ${
               activeModule === 'studio' ? '' : 'text-neutral-400 hover:text-white'
             }`}
@@ -2761,7 +2763,7 @@ function Studio({ initialProjects }) {
           </button>
           <button
             onClick={() => setActiveModule('timeline')}
-            style={activeModule === 'timeline' ? { backgroundColor: accentColor, color: '#0B0B0B' } : undefined}
+            style={activeModule === 'timeline' ? { backgroundColor: accentColor, color: onAccent(accentColor) } : undefined}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition ${
               activeModule === 'timeline' ? '' : 'text-neutral-400 hover:text-white'
             }`}
@@ -2777,7 +2779,7 @@ function Studio({ initialProjects }) {
               <button
                 key={res}
                 onClick={() => updateProject({ resolution: res })}
-                style={activeProject.resolution === res ? { color: accentColor } : undefined}
+                style={activeProject.resolution === res ? { color: accentInk(accentColor) } : undefined}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-mono transition ${
                   activeProject.resolution === res ? 'bg-[#262626] font-bold' : 'text-neutral-500 hover:text-white'
                 }`}
@@ -2792,7 +2794,7 @@ function Studio({ initialProjects }) {
               <button
                 key={ar}
                 onClick={() => updateProject({ aspectRatio: ar })}
-                style={activeProject.aspectRatio === ar ? { color: accentColor } : undefined}
+                style={activeProject.aspectRatio === ar ? { color: accentInk(accentColor) } : undefined}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-mono transition ${
                   activeProject.aspectRatio === ar ? 'bg-[#262626] font-bold' : 'text-neutral-500 hover:text-white'
                 }`}
@@ -2806,11 +2808,11 @@ function Studio({ initialProjects }) {
             onClick={() => setShowAssetsModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#141414] hover:bg-[#1C1C1C] border border-[#262626] text-xs font-medium text-white transition"
           >
-            <History className="w-3.5 h-3.5" style={{ color: accentColor }} />
+            <History className="w-3.5 h-3.5" style={{ color: accentInk(accentColor) }} />
             <span className="hidden sm:inline">Ассеты</span>
             {cleanPlatesCount > 0 && (
               <span
-                className="px-1.5 py-0.2 rounded-full text-[10px] font-bold text-black"
+                className="px-1.5 py-0.2 rounded-full text-[10px] font-bold text-[var(--accent-on)]"
                 style={{ backgroundColor: accentColor }}
               >
                 {cleanPlatesCount}
@@ -2833,7 +2835,7 @@ function Studio({ initialProjects }) {
       <div className="flex md:hidden items-center justify-center gap-2 p-2 border-b border-[#262626] bg-[#101010]">
         <button
           onClick={() => setActiveModule('studio')}
-          style={activeModule === 'studio' ? { backgroundColor: accentColor, color: '#0B0B0B' } : undefined}
+          style={activeModule === 'studio' ? { backgroundColor: accentColor, color: onAccent(accentColor) } : undefined}
           className={`flex-1 py-1.5 rounded-full text-xs font-semibold ${
             activeModule === 'studio' ? '' : 'bg-[#181818] text-neutral-400'
           }`}
@@ -2842,7 +2844,7 @@ function Studio({ initialProjects }) {
         </button>
         <button
           onClick={() => setActiveModule('timeline')}
-          style={activeModule === 'timeline' ? { backgroundColor: accentColor, color: '#0B0B0B' } : undefined}
+          style={activeModule === 'timeline' ? { backgroundColor: accentColor, color: onAccent(accentColor) } : undefined}
           className={`flex-1 py-1.5 rounded-full text-xs font-semibold ${
             activeModule === 'timeline' ? '' : 'bg-[#181818] text-neutral-400'
           }`}
@@ -2875,7 +2877,7 @@ function Studio({ initialProjects }) {
                   <button
                     key={t.id}
                     onClick={() => setLeftTab(t.id)}
-                    style={active ? { backgroundColor: accentColor, color: '#0B0B0B' } : undefined}
+                    style={active ? { backgroundColor: accentColor, color: onAccent(accentColor) } : undefined}
                     className={`flex items-center justify-center gap-1.5 py-2 rounded-full text-xs font-semibold transition ${
                       active ? '' : 'bg-[#161616] text-neutral-400 hover:text-white'
                     }`}
@@ -2898,7 +2900,7 @@ function Studio({ initialProjects }) {
                       <button
                         onClick={handleAddCamera}
                         disabled={activeProject.cameras.length >= 5}
-                        style={{ color: accentColor }}
+                        style={{ color: accentInk(accentColor) }}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1C1C1C] hover:bg-[#262626] disabled:opacity-40 text-[11px] font-medium border border-[#2A2A2A] transition"
                       >
                         <Plus className="w-3 h-3" /> Добавить
@@ -2912,7 +2914,7 @@ function Studio({ initialProjects }) {
                           <button
                             key={cam.id}
                             onClick={() => setActiveCameraId(cam.id)}
-                            style={isActive ? { backgroundColor: accentColor, borderColor: accentColor, color: '#0B0B0B' } : undefined}
+                            style={isActive ? { backgroundColor: accentColor, borderColor: accentColor, color: onAccent(accentColor) } : undefined}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
                               isActive ? '' : 'bg-[#161616] text-neutral-300 border-[#262626] hover:border-neutral-500'
                             }`}
@@ -2921,7 +2923,7 @@ function Studio({ initialProjects }) {
                             {cam.cleanPlateImage && (
                               <span
                                 className="w-1.5 h-1.5 rounded-full"
-                                style={{ backgroundColor: isActive ? '#0B0B0B' : accentColor }}
+                                style={{ backgroundColor: isActive ? onAccent(accentColor) : accentColor }}
                               />
                             )}
                           </button>
@@ -2966,7 +2968,7 @@ function Studio({ initialProjects }) {
                       onClick={() => setShowBrawModal(true)}
                       className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-full bg-[#1C1C1C] hover:bg-[#242424] border border-[#333333] text-xs font-medium text-white transition"
                     >
-                      <FileText className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                      <FileText className="w-3.5 h-3.5" style={{ color: accentInk(accentColor) }} />
                       Вставить метаданные из Premiere (BRAW)
                     </button>
                   </div>
@@ -2977,7 +2979,7 @@ function Studio({ initialProjects }) {
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
                         Оптика и свет (BRAW)
                       </span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1A1A1A]" style={{ color: accentColor }}>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1A1A1A]" style={{ color: accentInk(accentColor) }}>
                         ≈ {Math.round(activeCamera.focalLength * activeCamera.cropFactor)}mm FF eq.
                       </span>
                     </div>
@@ -3104,7 +3106,7 @@ function Studio({ initialProjects }) {
                       <button
                         onClick={handleAddSpeaker}
                         disabled={activeProject.speakers.length >= 5}
-                        style={{ color: accentColor }}
+                        style={{ color: accentInk(accentColor) }}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1C1C1C] hover:bg-[#262626] disabled:opacity-40 text-[11px] border border-[#2A2A2A]"
                       >
                         <Plus className="w-3 h-3" /> Добавить
@@ -3174,7 +3176,7 @@ function Studio({ initialProjects }) {
                             <button
                               key={key}
                               onClick={() => handleSelectFurniturePreset(key)}
-                              style={active ? { backgroundColor: accentColor, borderColor: accentColor, color: '#0B0B0B' } : undefined}
+                              style={active ? { backgroundColor: accentColor, borderColor: accentColor, color: onAccent(accentColor) } : undefined}
                               className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition ${
                                 active ? 'font-semibold' : 'bg-[#141414] text-neutral-300 border-[#262626] hover:border-neutral-500'
                               }`}
@@ -3196,7 +3198,7 @@ function Studio({ initialProjects }) {
                             onClick={() => handleAddFurnitureItem(key)}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#181818] hover:bg-[#242424] border border-[#2C2C2C] hover:border-[var(--accent)] text-[11px] text-white transition"
                           >
-                            <Plus className="w-3 h-3" style={{ color: accentColor }} />
+                            <Plus className="w-3 h-3" style={{ color: accentInk(accentColor) }} />
                             {spec.label}
                           </button>
                         ))}
@@ -3217,7 +3219,7 @@ function Studio({ initialProjects }) {
                                   <span className="truncate">{item.name}</span>
                                 </span>
                                 <div className="flex items-center gap-2 shrink-0">
-                                  <span className="text-xs font-mono" style={{ color: accentColor }}>
+                                  <span className="text-xs font-mono" style={{ color: accentInk(accentColor) }}>
                                     {item.heightCm} см
                                   </span>
                                   <button
@@ -3284,7 +3286,7 @@ function Studio({ initialProjects }) {
                       </span>
                       <label
                         style={{ backgroundColor: accentColor }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-full text-black text-[11px] font-semibold cursor-pointer hover:brightness-110 transition"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[var(--accent-on)] text-[11px] font-semibold cursor-pointer hover:brightness-110 transition"
                       >
                         <Plus className="w-3 h-3" /> Фото
                         <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleUploadLocationRefs} />
@@ -3358,7 +3360,7 @@ function Studio({ initialProjects }) {
                       className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium text-neutral-300 hover:text-white"
                     >
                       <span className="flex items-center gap-1.5">
-                        <Code className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                        <Code className="w-3.5 h-3.5" style={{ color: accentInk(accentColor) }} />
                         Авто-промпт (EN)
                       </span>
                       {showPromptEditor ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -3375,7 +3377,7 @@ function Studio({ initialProjects }) {
                         {activeProject.customPromptOverride && (
                           <button
                             onClick={() => updateProject({ customPromptOverride: '' })}
-                            style={{ color: accentColor }}
+                            style={{ color: accentInk(accentColor) }}
                             className="flex items-center gap-1 text-[11px] hover:underline"
                           >
                             <RotateCcw className="w-3 h-3" /> Сбросить к автосборке
@@ -3404,7 +3406,7 @@ function Studio({ initialProjects }) {
                     <button
                       key={item.id}
                       onClick={() => setWorkspaceLayout(item.id)}
-                      style={active ? { color: accentColor } : undefined}
+                      style={active ? { color: accentInk(accentColor) } : undefined}
                       className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition ${
                         active ? 'bg-[#262626] font-semibold' : 'text-neutral-400 hover:text-white'
                       }`}
@@ -3419,7 +3421,7 @@ function Studio({ initialProjects }) {
                 <select
                   value={activeProject.resolution}
                   onChange={(e) => updateProject({ resolution: e.target.value })}
-                  style={{ color: accentColor }}
+                  style={{ color: accentInk(accentColor) }}
                   className="bg-[#141414] border border-[#262626] rounded-full px-2.5 py-1 text-xs font-mono"
                 >
                   <option value="1080p">1080p</option>
@@ -3476,7 +3478,7 @@ function Studio({ initialProjects }) {
                     backgroundColor: accentColor,
                     boxShadow: `0 0 24px ${accentAlpha(accentColor, 0.2)}`
                   }}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-full hover:brightness-110 disabled:opacity-50 text-black text-xs font-bold tracking-wide transition"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-full hover:brightness-110 disabled:opacity-50 text-[var(--accent-on)] text-xs font-bold tracking-wide transition"
                 >
                   <Sparkles className="w-4 h-4" />
                   {generatingCamA && !batchProgress ? 'Генерируем фон…' : `Сгенерировать фон для ${activeCamera?.name}`}
@@ -3487,7 +3489,7 @@ function Studio({ initialProjects }) {
                   disabled={!!generatingCamA || !!batchProgress || generatingPanorama || !activeProject.cameras.some(c => c.inputImage)}
                   style={{
                     borderColor: accentAlpha(accentColor, 0.55),
-                    color: accentColor
+                    color: accentInk(accentColor)
                   }}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-transparent hover:bg-white/5 disabled:opacity-40 border text-xs font-semibold transition"
                 >
@@ -3503,7 +3505,7 @@ function Studio({ initialProjects }) {
                 disabled={cleanPlatesCount === 0}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#1C1C1C] hover:bg-[#262626] disabled:opacity-40 border border-[#2A2A2A] text-xs font-semibold text-white transition"
               >
-                <Download className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                <Download className="w-3.5 h-3.5" style={{ color: accentInk(accentColor) }} />
                 Скачать фоны ({cleanPlatesCount})
               </button>
             </div>
@@ -3529,7 +3531,7 @@ function Studio({ initialProjects }) {
                         <Camera className="w-5 h-5 text-neutral-700" />
                       )}
                       <span
-                        style={isActive ? { backgroundColor: accentColor, color: '#0B0B0B' } : undefined}
+                        style={isActive ? { backgroundColor: accentColor, color: onAccent(accentColor) } : undefined}
                         className={`absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
                           isActive ? '' : 'bg-black/75 text-white'
                         }`}
@@ -3602,7 +3604,7 @@ function Studio({ initialProjects }) {
               <div className="flex items-center justify-between gap-2">
                 <button
                   onClick={() => setBrawInputText(SAMPLE_BRAW_METADATA)}
-                  style={{ color: accentColor }}
+                  style={{ color: accentInk(accentColor) }}
                   className="text-xs hover:underline"
                 >
                   Вставить тестовый пример BRAW
@@ -3617,7 +3619,7 @@ function Studio({ initialProjects }) {
                   <button
                     onClick={handleApplyBrawMetadata}
                     style={{ backgroundColor: accentColor }}
-                    className="px-5 py-2 rounded-full text-black text-xs font-bold hover:brightness-110"
+                    className="px-5 py-2 rounded-full text-[var(--accent-on)] text-xs font-bold hover:brightness-110"
                   >
                     Распознать и заполнить
                   </button>
@@ -3644,7 +3646,7 @@ function Studio({ initialProjects }) {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-white flex items-center gap-1.5">
-                    <Palette className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                    <Palette className="w-3.5 h-3.5" style={{ color: accentInk(accentColor) }} />
                     Акцентный цвет интерфейса
                   </label>
                   <button
@@ -3692,16 +3694,16 @@ function Studio({ initialProjects }) {
 
                 {/* Live Contrast Safety Preview */}
                 <div className="p-2.5 rounded-xl bg-[#0B0B0B] border border-[#222222] flex items-center justify-between gap-2">
-                  <span className="px-3 py-1 rounded-full text-[11px] font-bold text-black" style={{ backgroundColor: accentColor }}>
+                  <span className="px-3 py-1 rounded-full text-[11px] font-bold text-[var(--accent-on)]" style={{ backgroundColor: accentColor }}>
                     Кнопка
                   </span>
-                  <span className="text-[11px] font-mono" style={{ color: accentColor }}>
+                  <span className="text-[11px] font-mono" style={{ color: accentInk(accentColor) }}>
                     Цвет текста
                   </span>
                   <span className="text-[10px] text-neutral-500">Защита контраста ✓</span>
                 </div>
                 <p className="text-[10px] text-neutral-500 leading-relaxed">
-                  Цвет привязан локально к этому компьютеру. Слишком тёмные оттенки автоматически осветляются, чтобы тексты и кнопки всегда оставались читаемыми.
+                  Цвет привязан к этому компьютеру. Текст на кнопках подбирается сам — белый или чёрный, что читается лучше. Акцентные надписи на тёмном фоне при необходимости чуть осветляются.
                 </p>
               </div>
 
@@ -3763,7 +3765,7 @@ function Studio({ initialProjects }) {
                 <button
                   onClick={() => { setShowSettingsModal(false); showToast('Настройки сохранены', 'success'); }}
                   style={{ backgroundColor: accentColor }}
-                  className="px-5 py-2 rounded-full text-black text-xs font-bold hover:brightness-110 transition"
+                  className="px-5 py-2 rounded-full text-[var(--accent-on)] text-xs font-bold hover:brightness-110 transition"
                 >
                   Готово
                 </button>
@@ -3787,7 +3789,7 @@ function Studio({ initialProjects }) {
                   onClick={handleDownloadAllCleanPlates}
                   disabled={cleanPlatesCount === 0}
                   style={{ backgroundColor: accentColor }}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full disabled:opacity-40 text-black text-xs font-bold"
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full disabled:opacity-40 text-[var(--accent-on)] text-xs font-bold"
                 >
                   <Download className="w-3.5 h-3.5" /> Скачать фоны ({cleanPlatesCount})
                 </button>
@@ -3802,7 +3804,7 @@ function Studio({ initialProjects }) {
                 <div key={cam.id} className="bg-[#0E0E0E] border border-[#262626] rounded-xl p-3.5">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#262626]" style={{ color: accentColor }}>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#262626]" style={{ color: accentInk(accentColor) }}>
                         {cam.name}
                       </span>
                       <span className="text-xs font-mono text-neutral-400">{cam.focalLength}mm · {cam.aperture} · {cam.wbKelvin}K</span>
@@ -3817,7 +3819,7 @@ function Studio({ initialProjects }) {
                         )}
                         className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1C1C1C] hover:bg-[#262626] text-xs text-white border border-[#333333]"
                       >
-                        <Download className="w-3 h-3" style={{ color: accentColor }} /> {cam.name.replace(/\s+/g, '_')}_clean.png
+                        <Download className="w-3 h-3" style={{ color: accentInk(accentColor) }} /> {cam.name.replace(/\s+/g, '_')}_clean.png
                       </button>
                     )}
                   </div>
@@ -3868,7 +3870,7 @@ function Studio({ initialProjects }) {
               <button
                 onClick={handleCreateProject}
                 style={{ backgroundColor: accentColor }}
-                className="px-5 py-2 rounded-full text-black text-xs font-bold"
+                className="px-5 py-2 rounded-full text-[var(--accent-on)] text-xs font-bold"
               >
                 Создать
               </button>
@@ -3900,7 +3902,7 @@ function Studio({ initialProjects }) {
       {/* ==================== TOAST NOTIFICATION ==================== */}
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-[#161616] border border-[#333333] shadow-2xl text-xs font-medium text-white max-w-sm">
-          {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: accentColor }} />}
+          {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: accentInk(accentColor) }} />}
           {toast.type === 'error' && <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />}
           {toast.type === 'info' && <Sparkles className="w-4 h-4 text-sky-400 shrink-0" />}
           <span>{toast.text}</span>
