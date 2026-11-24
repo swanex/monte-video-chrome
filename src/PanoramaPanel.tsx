@@ -92,7 +92,7 @@ export default function PanoramaPanel({
             Генерируем панораму <span className="font-mono" style={{ color: accentColor }}>{formatElapsed(elapsed)}</span>
           </div>
           <div className="text-[10px] text-neutral-400 leading-relaxed">
-            Отправили модели: {[refsCount > 0 ? `фото локации (${refsCount})` : null, hasNotes ? 'комментарий оператора' : null].filter(Boolean).join(' и ') || 'только задание'}.
+            Отправили модели: {[refsCount > 0 ? `фото локации (${refsCount})` : null, hasNotes ? 'комментарий режиссёра' : null].filter(Boolean).join(' и ') || 'только задание'}.
             Задание: широкая панорама 21:9, охват ~150°, без людей и мебели. Обычно 20–60 секунд.
           </div>
         </div>

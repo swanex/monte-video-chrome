@@ -1,4 +1,10 @@
+/* Inter 4 (переменный, с оптическими размерами): лежит в сборке сайта, без внешних сервисов. Лицензия SIL OFL 1.1. */
+@import "@fontsource-variable/inter/opsz.css";
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
 
 html,
 body,
@@ -10,4 +16,15 @@ body,
 body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: var(--font-sans);
+  /* Оптический размер подстраивается под кегль: мелкие подписи шире и читаемее */
+  font-optical-sizing: auto;
+  /* cv11 — однобокая «a», ss03 — округлые запятые/кавычки. tnum не включаем: он расширяет дефис («стоп - кадр») */
+  font-feature-settings: "cv11", "ss03";
+}
+
+/* SVG-подписи на плане и профиле, у которых не задан моноширинный шрифт */
+svg text:not([font-family]) {
+  font-family: var(--font-sans);
 }

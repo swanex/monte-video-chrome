@@ -71,17 +71,15 @@ const CHROMA_POLY = [
 const STORAGE_KEY_PROJECTS = 'mv_chrome_projects_v1';
 const STORAGE_KEY_API = 'mv_chrome_api_key_v1';
 const STORAGE_KEY_ACCENT = 'mv_chrome_accent_v1';
-const DEFAULT_ACCENT = '#D9FF00';
+const DEFAULT_ACCENT = '#D3FD15';
 const HISTORY_LIMIT = 16;
 
 const SAFE_ACCENT_PRESETS = [
-  { name: 'Кислотный лайм', hex: '#D9FF00' },
-  { name: 'Неон-циан', hex: '#00E5FF' },
-  { name: 'Солнечный янтарь', hex: '#FFB800' },
-  { name: 'Коралловый', hex: '#FF6B6B' },
-  { name: 'Лавандовый', hex: '#C084FC' },
-  { name: 'Мятный', hex: '#34D399' },
-  { name: 'Чистый белый', hex: '#F5F5F5' }
+  { name: 'Лайм', hex: '#D3FD15' },
+  { name: 'Синий', hex: '#1473E6' },
+  { name: 'Зелёный', hex: '#25D366' },
+  { name: 'Красный', hex: '#CF362E' },
+  { name: 'Белый', hex: '#F5F5F5' }
 ];
 
 const SAMPLE_BRAW_METADATA = `File Path: D:\\MONTE_VIDEO\\SHOOT_01\\A001_05141230_C001.braw
@@ -462,8 +460,8 @@ function buildAutoPrompt(project, camera, stage = 'A', translatedComment = '') {
     : 'No furniture (standing setup)';
 
   const commentSection = translatedComment
-    ? `Director/Operator notes: ${translatedComment}`
-    : (project.russianComment ? `Director/Operator notes (RU): ${project.russianComment}` : '');
+    ? `Director notes: ${translatedComment}`
+    : (project.russianComment ? `Director notes (RU): ${project.russianComment}` : '');
 
   const opticsBlock = [
     `Camera: ${camera.cameraType} (Crop factor ${camera.cropFactor}x), Lens: ${camera.lensType}.`,
@@ -702,7 +700,7 @@ async function translateRussianNotesToEnglish(ruText, apiKey) {
       contents: [{ parts: [{ text: ruText }] }],
       systemInstruction: {
         parts: [{
-          text: 'You are a virtual production cinematographer translator. Translate the following Russian studio set & lighting notes into concise, accurate English suitable for an image generation prompt. Return ONLY the translated English text.'
+          text: 'You are a virtual production cinematographer translator. Translate the following Russian notes from the film director about the set and lighting into concise, accurate English suitable for an image generation prompt. Return ONLY the translated English text.'
         }]
       }
     };
@@ -1099,17 +1097,19 @@ function StudioTopViewCanvas({
   return (
     <div className="relative w-full bg-[#0E0E0E] border border-[#262626] rounded-2xl overflow-hidden select-none">
       {/* Top Overlay Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1E1E1E] bg-[#121212]">
-        <div className="flex items-center gap-2">
-          <Compass className="w-4 h-4" style={{ color: accentColor }} />
-          <span className="text-xs font-semibold tracking-wide text-white uppercase">
-            План студии 12 м × 9 м (Top-View)
+      <div className="flex items-center justify-between gap-6 px-4 py-2.5 border-b border-[#1E1E1E] bg-[#121212]">
+        <div className="flex items-center gap-2 min-w-0">
+          <Compass className="w-4 h-4 shrink-0" style={{ color: accentColor }} />
+          {/* Переносится целиком «(Top-View)», а не посреди размеров */}
+          <span className="text-xs font-semibold tracking-wide text-white uppercase leading-tight">
+            <span className="whitespace-nowrap">План студии 12&nbsp;м&nbsp;×&nbsp;9&nbsp;м</span>{' '}
+            <span className="whitespace-nowrap">(Top-View)</span>
           </span>
-          <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#1C1C1C] text-neutral-400 border border-[#262626]">
-            Сетка: 1м / 10см
+          <span className="hidden sm:inline-flex shrink-0 items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] bg-[#1C1C1C] text-neutral-400 border border-[#262626]">
+            Сетка: 1&nbsp;м&nbsp;/&nbsp;10&nbsp;см
           </span>
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-neutral-400">
+        <div className="flex items-center gap-3 text-[11px] text-neutral-400 text-right">
           {collisionFlash ? (
             <span className="text-emerald-400 font-medium flex items-center gap-1 animate-pulse">
               <AlertCircle className="w-3.5 h-3.5" /> Collision Guard: граница хромакея
@@ -2137,7 +2137,7 @@ function Studio({ initialProjects }) {
     return () => window.removeEventListener('pagehide', flush);
   }, []);
 
-  // Сколько места занимают проекты (показываем в «Установках»)
+  // Сколько места занимают проекты (показываем в «Настройках»)
   const [storageInfo, setStorageInfo] = useState(null);
   useEffect(() => {
     if (!showSettingsModal) return;
@@ -2454,7 +2454,7 @@ function Studio({ initialProjects }) {
 
   const checkCanGenerate = () => {
     if (activeProject.locationRefs.length === 0 && !activeProject.russianComment.trim()) {
-      showToast('Загрузите хотя бы 1 референс локации или опишите её в комментарии', 'error');
+      showToast('Загрузите хотя бы 1 референс локации или опишите её в комментарии режиссёра', 'error');
       setLeftTab('location');
       return false;
     }
@@ -2528,7 +2528,7 @@ function Studio({ initialProjects }) {
 
   const handleGeneratePanorama = async () => {
     if (activeProject.locationRefs.length === 0 && !activeProject.russianComment.trim()) {
-      showToast('Для панорамы нужны фото локации или описание в комментарии', 'error');
+      showToast('Для панорамы нужны фото локации или описание в комментарии режиссёра', 'error');
       setLeftTab('location');
       return;
     }
@@ -2721,7 +2721,7 @@ function Studio({ initialProjects }) {
                       style={{ color: accentColor }}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs hover:bg-[#1E1E1E] font-medium transition"
                     >
-                      <Copy className="w-3.5 h-3.5" /> Дублировать проект (1 клик)
+                      <Copy className="w-3.5 h-3.5" /> Дублировать проект
                     </button>
                     <div className="grid grid-cols-2 gap-1 pt-1 border-t border-[#222222]">
                       <button
@@ -2821,10 +2821,10 @@ function Studio({ initialProjects }) {
           <button
             onClick={() => setShowSettingsModal(true)}
             className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-full bg-[#141414] hover:bg-[#1C1C1C] border border-[#262626] text-neutral-300 hover:text-white text-xs font-medium transition"
-            title="Установки: API-ключ и акцентный цвет"
+            title="Настройки: API-ключ и акцентный цвет"
           >
             <Settings className="w-4 h-4" />
-            <span className="hidden lg:inline">Установки</span>
+            <span className="hidden lg:inline">Настройки</span>
           </button>
         </div>
       </header>
@@ -3338,7 +3338,7 @@ function Studio({ initialProjects }) {
 
                   <div className="bg-[#0E0E0E] border border-[#262626] rounded-xl p-3 space-y-2">
                     <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 block">
-                      Комментарий оператора (на русском)
+                      Комментарий режиссёра (на русском)
                     </label>
                     <textarea
                       rows={4}
@@ -3395,8 +3395,8 @@ function Studio({ initialProjects }) {
               <div className="flex items-center gap-1.5 bg-[#141414] border border-[#262626] p-1 rounded-full">
                 {[
                   { id: 'split', label: 'План + Превью', icon: Columns },
-                  { id: 'plan', label: 'Только План', icon: Compass },
-                  { id: 'preview', label: 'Только Превью', icon: Maximize2 }
+                  { id: 'plan', label: 'План', icon: Compass },
+                  { id: 'preview', label: 'Превью', icon: Maximize2 }
                 ].map(item => {
                   const Icon = item.icon;
                   const active = workspaceLayout === item.id;
@@ -3628,12 +3628,12 @@ function Studio({ initialProjects }) {
         </div>
       )}
 
-      {/* 2. Установки (API-ключ + акцентный цвет + хранилище) */}
+      {/* 2. Настройки (API-ключ + акцентный цвет + хранилище) */}
       {showSettingsModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#141414] border border-[#262626] rounded-2xl overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#222222]">
-              <h3 className="text-sm font-bold text-white">Установки</h3>
+              <h3 className="text-sm font-bold text-white">Настройки</h3>
               <button onClick={() => setShowSettingsModal(false)} className="text-neutral-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -3693,10 +3693,10 @@ function Studio({ initialProjects }) {
                 {/* Live Contrast Safety Preview */}
                 <div className="p-2.5 rounded-xl bg-[#0B0B0B] border border-[#222222] flex items-center justify-between gap-2">
                   <span className="px-3 py-1 rounded-full text-[11px] font-bold text-black" style={{ backgroundColor: accentColor }}>
-                    Кнопка CTA
+                    Кнопка
                   </span>
                   <span className="text-[11px] font-mono" style={{ color: accentColor }}>
-                    Акцент на тёмном
+                    Цвет текста
                   </span>
                   <span className="text-[10px] text-neutral-500">Защита контраста ✓</span>
                 </div>
@@ -3761,7 +3761,7 @@ function Studio({ initialProjects }) {
                   v{__APP_VERSION__} · {__APP_COMMIT__.slice(0, 7)} · {new Date(__APP_BUILD_DATE__).toLocaleDateString('ru-RU')}
                 </a>
                 <button
-                  onClick={() => { setShowSettingsModal(false); showToast('Установки сохранены', 'success'); }}
+                  onClick={() => { setShowSettingsModal(false); showToast('Настройки сохранены', 'success'); }}
                   style={{ backgroundColor: accentColor }}
                   className="px-5 py-2 rounded-full text-black text-xs font-bold hover:brightness-110 transition"
                 >

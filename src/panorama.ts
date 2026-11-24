@@ -167,8 +167,8 @@ export async function cropCameraSector(project, camera, fovDeg, frameAspect = 16
 
 export function buildPanoramaPrompt(project, translatedNotes = '') {
   const notes = translatedNotes
-    ? `Director/Operator notes: ${translatedNotes}`
-    : (project.russianComment ? `Director/Operator notes (RU): ${project.russianComment}` : '');
+    ? `Director notes: ${translatedNotes}`
+    : (project.russianComment ? `Director notes (RU): ${project.russianComment}` : '');
   return [
     `TASK: Create the MASTER PANORAMA of one interior location for a multi-camera virtual production (green screen) set.`,
     `Output ONE seamless, photorealistic horizontal panorama covering about ${GENERATED_PANORAMA_HFOV}° of the room, cylindrical projection like a phone panorama. Eye level about 1.3 m, horizon exactly at the vertical middle, all vertical lines perfectly vertical, even exposure and identical lighting across the whole width.`,
